@@ -1,4 +1,4 @@
-# YouTube Auto Dub - Day 01
+# YouTube Auto Dub - Day 02
 
 ## Project Overview
 YouTube Auto Dub is a tool to automatically dub YouTube videos into different languages.
@@ -12,7 +12,13 @@ YouTube Auto Dub is a tool to automatically dub YouTube videos into different la
 - Audio mixing and video reconstruction
 
 ## Current Status
-Day 01: Basic project structure initialized.
+Day 02: Added basic core utilities and configuration.
+
+## New Features
+- Basic URL validation
+- Directory setup utilities
+- Configuration class
+- Basic error handling
 
 ## Installation
 ```bash
@@ -27,3 +33,4 @@ python main.py
 ## Dependencies
 - yt-dlp: YouTube video downloading
 - requests: HTTP requests
+- pathlib2: Enhanced path handling
