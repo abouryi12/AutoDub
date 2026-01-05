@@ -1,156 +1,277 @@
 """
-Core Utilities - Day 06
-Enhanced utility functions with better file handling
+Core utilities and exceptions for YouTube Auto Dub.
+
+This module consolidates shared utilities, exceptions, and helper functions
+used across the entire pipeline to reduce code duplication.
+
+Author: YouTube Auto Dub Team
+Version: 3.0
 """
 
-import os
-import re
-import shutil
-import json
+import subprocess
 import time
+import traceback
 from pathlib import Path
-from datetime import datetime
+from typing import Dict, List, Optional, Union
 
-def setup_directories():
-    """Create necessary directories if they don't exist"""
-    directories = ['output', 'temp', '.cache']
+
+# =============================================================================
+# CUSTOM EXCEPTIONS
+# =============================================================================
+
+class YouTubeAutoDubError(Exception):
+    """Base exception for all YouTube Auto Dub errors."""
+    pass
+
+
+class ModelLoadError(YouTubeAutoDubError):
+    """Raised when AI/ML model fails to load."""
+    pass
+
+
+class AudioProcessingError(YouTubeAutoDubError):
+    """Raised when audio processing operations fail."""
+    pass
+
+
+class TranscriptionError(YouTubeAutoDubError):
+    """Raised when speech transcription fails."""
+    pass
+
+
+class TranslationError(YouTubeAutoDubError):
+    """Raised when text translation fails."""
+    pass
+
+
+class TTSError(YouTubeAutoDubError):
+    """Raised when text-to-speech synthesis fails."""
+    pass
+
+
+class VideoProcessingError(YouTubeAutoDubError):
+    """Raised when video processing operations fail."""
+    pass
+
+
+class ConfigurationError(YouTubeAutoDubError):
+    """Raised when configuration is invalid or missing."""
+    pass
+
+
+class DependencyError(YouTubeAutoDubError):
+    """Raised when required dependencies are missing."""
+    pass
+
+
+class ValidationError(YouTubeAutoDubError):
+    """Raised when input validation fails."""
+    pass
+
+
+class ResourceError(YouTubeAutoDubError):
+    """Raised when system resources are insufficient."""
+    pass
+
+
+# =============================================================================
+# ERROR HANDLING UTILITIES
+# =============================================================================
+
+def handle_error(error: Exception, context: str = "") -> None:
+    """Centralized error handling with context.
     
-    for directory in directories:
-        Path(directory).mkdir(exist_ok=True)
-        print(f"Directory ready: {directory}")
+    Args:
+        error: The exception that occurred.
+        context: Additional context about where the error occurred.
+    """
+    if context:
+        print(f"[!] ERROR in {context}: {error}")
+    else:
+        print(f"[!] ERROR: {error}")
+    
+    print(f"    Full traceback: {traceback.format_exc()}")
 
-def validate_url(url):
-    """Enhanced URL validation for YouTube"""
-    if not url:
+
+def safe_execute(func, *args, error_type: type = YouTubeAutoDubError, context: str = "", **kwargs):
+    """Safely execute a function with error handling.
+    
+    Args:
+        func: Function to execute.
+        *args: Function arguments.
+        error_type: Type of exception to raise on failure.
+        context: Context for error messages.
+        **kwargs: Function keyword arguments.
+        
+    Returns:
+        Result of function execution.
+        
+    Raises:
+        error_type: Specified exception type on failure.
+    """
+    try:
+        return func(*args, **kwargs)
+    except Exception as e:
+        if isinstance(e, error_type):
+            raise
+        else:
+            raise error_type(f"{context}: {str(e)}") from e
+
+
+# =============================================================================
+# AUDIO/MEDIA UTILITIES
+# =============================================================================
+
+def get_duration(path: Path) -> float:
+    """Get the duration of an audio/video file using FFprobe.
+    
+    Args:
+        path: Path to the media file.
+        
+    Returns:
+        Duration in seconds. Returns 0.0 if duration cannot be determined.
+    """
+    if not path.exists():
+        return 0.0
+    
+    try:
+        cmd = [
+            'ffprobe', '-v', 'error',
+            '-show_entries', 'format=duration',
+            '-of', 'default=noprint_wrappers=1:nokey=1',
+            str(path)
+        ]
+        
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, check=True, timeout=30
+        )
+        
+        duration_str = result.stdout.strip()
+        if duration_str:
+            return float(duration_str)
+        else:
+            return 0.0
+            
+    except Exception:
+        return 0.0
+
+
+def run_ffmpeg_command(cmd: List[str], timeout: int = 300, description: str = "FFmpeg operation") -> None:
+    """Run FFmpeg command with consistent error handling.
+    
+    Args:
+        cmd: FFmpeg command to run.
+        timeout: Command timeout in seconds.
+        description: Description for error messages.
+        
+    Raises:
+        RuntimeError: If FFmpeg command fails.
+    """
+    try:
+        subprocess.run(cmd, check=True, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(f"{description} timed out")
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(f"{description} failed: {e}")
+    except Exception as e:
+        raise RuntimeError(f"Unexpected error during {description}: {e}")
+
+
+def validate_audio_file(file_path: Path, min_size: int = 1024) -> bool:
+    """Validate that audio file exists and has minimum size.
+    
+    Args:
+        file_path: Path to audio file.
+        min_size: Minimum file size in bytes.
+        
+    Returns:
+        True if file is valid, False otherwise.
+    """
+    if not file_path.exists():
         return False
     
-    youtube_pattern = r'(youtube\.com|youtu\.be)'
-    return bool(re.search(youtube_pattern, url))
-
-def clean_temp_files():
-    """Clean temporary files"""
-    temp_dir = Path("temp")
-    if temp_dir.exists():
-        cleaned_count = 0
-        for file in temp_dir.glob("*"):
-            if file.is_file():
-                file.unlink()
-                cleaned_count += 1
-        print(f"Cleaned {cleaned_count} temp files")
-
-def get_video_id(url):
-    """Extract video ID from YouTube URL"""
-    patterns = [
-        r'(?:youtube\.com/watch\?v=|youtu\.be/|youtube\.com/embed/)([a-zA-Z0-9_-]{11})',
-        r'youtube\.com/watch\?.*v=([a-zA-Z0-9_-]{11})'
-    ]
+    if file_path.stat().st_size < min_size:
+        return False
     
-    for pattern in patterns:
-        match = re.search(pattern, url)
-        if match:
-            return match.group(1)
+    return True
+
+
+def safe_file_delete(file_path: Path) -> None:
+    """Safely delete file with error handling.
     
-    return None
-
-def get_file_size(file_path):
-    """Get file size in MB"""
+    Args:
+        file_path: Path to file to delete.
+    """
     try:
-        size_bytes = Path(file_path).stat().st_size
-        return size_bytes / (1024 * 1024)  # Convert to MB
-    except:
-        return 0
-
-def generate_unique_filename(base_name, extension, directory="temp"):
-    """Generate unique filename with timestamp"""
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"{base_name}_{timestamp}.{extension}"
-    return os.path.join(directory, filename)
-
-def save_progress(data, filename="progress.json"):
-    """Save processing progress to file"""
-    try:
-        progress_file = os.path.join(Config.CACHE_DIR, filename)
-        with open(progress_file, 'w') as f:
-            json.dump(data, f, indent=2)
-        print(f"Progress saved to {progress_file}")
+        if file_path.exists():
+            file_path.unlink()
     except Exception as e:
-        print(f"Error saving progress: {e}")
+        print(f"[!] WARNING: Could not delete file {file_path}: {e}")
 
-def load_progress(filename="progress.json"):
-    """Load processing progress from file"""
-    try:
-        progress_file = os.path.join(Config.CACHE_DIR, filename)
-        if Path(progress_file).exists():
-            with open(progress_file, 'r') as f:
-                return json.load(f)
-    except Exception as e:
-        print(f"Error loading progress: {e}")
-    return None
 
-def format_duration(seconds):
-    """Format duration in seconds to human readable format"""
-    if seconds < 60:
-        return f"{seconds:.1f}s"
-    elif seconds < 3600:
-        minutes = int(seconds // 60)
-        secs = int(seconds % 60)
-        return f"{minutes}m {secs}s"
-    else:
-        hours = int(seconds // 3600)
-        minutes = int((seconds % 3600) // 60)
-        return f"{hours}h {minutes}m"
+# =============================================================================
+# GENERAL UTILITIES
+# =============================================================================
 
-class Config:
-    """Enhanced configuration class"""
+def retry_with_backoff(func, max_retries: int = 3, base_delay: float = 1.0, description: str = "Operation"):
+    """Retry function with exponential backoff.
     
-    OUTPUT_DIR = "output"
-    TEMP_DIR = "temp"
-    CACHE_DIR = ".cache"
+    Args:
+        func: Function to retry.
+        max_retries: Maximum number of retry attempts.
+        base_delay: Base delay between retries in seconds.
+        description: Description for logging.
+        
+    Returns:
+        Result of function execution.
+        
+    Raises:
+        Last exception if all retries fail.
+    """
+    last_exception = None
     
-    # Audio settings
-    AUDIO_SAMPLE_RATE = 16000
-    AUDIO_CHANNELS = 1
-    AUDIO_BITRATE = "128k"
-    AUDIO_CHUNK_DURATION = 30  # seconds
+    for attempt in range(max_retries):
+        try:
+            return func()
+        except Exception as e:
+            last_exception = e
+            if attempt == max_retries - 1:
+                break
+                
+            wait_time = base_delay * (2 ** attempt)
+            print(f"[-] {description} failed (attempt {attempt + 1}/{max_retries}). Retrying in {wait_time}s...")
+            time.sleep(wait_time)
     
-    # Video settings
-    VIDEO_FORMAT = "mp4"
-    AUDIO_FORMAT = "wav"
+    raise last_exception
+
+
+class ProgressTracker:
+    """Simple progress tracking for long operations."""
     
-    # Download settings
-    MAX_FILE_SIZE = 500  # MB
-    CHUNK_SIZE = 8192
+    def __init__(self, total: int, description: str = "Processing", update_interval: int = 10):
+        """Initialize progress tracker.
+        
+        Args:
+            total: Total number of items to process.
+            description: Description for progress messages.
+            update_interval: How often to update progress (every N items).
+        """
+        self.total = total
+        self.description = description
+        self.update_interval = update_interval
+        self.current = 0
     
-    # Language settings
-    DEFAULT_SOURCE_LANGUAGE = "en"
-    DEFAULT_TARGET_LANGUAGE = "es"
-    DEFAULT_VOICE = "female"
-    
-    # Processing settings
-    MAX_CONCURRENT_CHUNKS = 4
-    RETRY_ATTEMPTS = 3
-    RETRY_DELAY = 2  # seconds
-
-class YouTubeError(Exception):
-    """Custom exception for YouTube-related errors"""
-    pass
-
-class AudioError(Exception):
-    """Custom exception for audio processing errors"""
-    pass
-
-class MediaError(Exception):
-    """Custom exception for media processing errors"""
-    pass
-
-class TranslationError(Exception):
-    """Custom exception for translation errors"""
-    pass
-
-class TTSError(Exception):
-    """Custom exception for TTS errors"""
-    pass
-
-class FileError(Exception):
-    """Custom exception for file handling errors"""
-    pass
+    def update(self, increment: int = 1) -> None:
+        """Update progress counter.
+        
+        Args:
+            increment: Number of items processed.
+        """
+        self.current += increment
+        
+        if self.current % self.update_interval == 0 or self.current >= self.total:
+            progress = (self.current / self.total) * 100
+            print(f"[-] {self.description}: {self.current}/{self.total} ({progress:.1f}%)", end='\r')
+            
+            if self.current >= self.total:
+                print()  # New line when complete

@@ -1,7 +1,4 @@
-"""
-YouTube Auto Dub Package - Day 06
-Enhanced package with improved audio processing
-"""
+"""YouTube Auto Dub - Automated Video Translation and Dubbing"""
 
-__version__ = "0.6.0"
+__version__ = "1.0.0"
 __author__ = "YouTube Auto Dub Team"

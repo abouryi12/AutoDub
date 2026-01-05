@@ -1,309 +1,417 @@
 """
-Engines Module - Day 06
-Enhanced translation and TTS engines with better error handling
+Consolidated AI/ML Engines Module for YouTube Auto Dub.
+
+This module provides the core AI/ML functionality including:
+- Device and configuration management
+- Whisper-based speech transcription  
+- Google Translate integration
+- Edge TTS synthesis
+- Pipeline orchestration and chunking
+
+Author: YouTube Auto Dub Team
+Version: 3.0 (Consolidated)
 """
 
-import requests
-import json
-import os
+import torch
+import asyncio
+import edge_tts
 import time
+import random
+import os
+import gc
+import json
+from abc import ABC, abstractmethod
 from pathlib import Path
-from core_utils import Config, TranslationError, TTSError
+from typing import List, Dict, Optional, Union, Any
 
-class TranslationEngine:
-    """Enhanced translation engine with retry logic"""
+# Local imports
+from src.googlev4 import GoogleTranslator
+from src.core_utils import (
+    ModelLoadError, TranscriptionError, TranslationError, TTSError, 
+    AudioProcessingError, handle_error, safe_execute, get_duration, 
+    run_ffmpeg_command, ProgressTracker, validate_audio_file, safe_file_delete
+)
+
+# =============================================================================
+# CONFIGURATION
+# =============================================================================
+
+# Base directory of the project
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Working directories
+CACHE_DIR = BASE_DIR / ".cache"
+OUTPUT_DIR = BASE_DIR / "output"  
+TEMP_DIR = BASE_DIR / "temp"
+
+# Configuration files
+LANG_MAP_FILE = BASE_DIR / "language_map.json"
+
+# Ensure directories exist
+for directory_path in [CACHE_DIR, OUTPUT_DIR, TEMP_DIR]:
+    directory_path.mkdir(parents=True, exist_ok=True)
+
+# Audio processing settings
+SAMPLE_RATE = 24000
+AUDIO_CHANNELS = 1
+ASR_MODEL = "base"
+DEFAULT_VOICE = "en-US-AriaNeural"
+
+# Load language configuration
+try:
+    with open(LANG_MAP_FILE, "r", encoding="utf-8") as f:
+        LANG_DATA = json.load(f)
+        print(f"[*] Loaded language configuration for {len(LANG_DATA)} languages")
+except (FileNotFoundError, json.JSONDecodeError) as e:
+    print(f"[!] WARNING: Could not load language map from {LANG_MAP_FILE}")
+    LANG_DATA = {}
+
+# =============================================================================
+# DEVICE AND CONFIGURATION MANAGEMENT
+# =============================================================================
+
+class DeviceManager:
+    """Centralized device detection and management."""
     
-    def __init__(self):
-        self.supported_languages = {
-            'en': 'English',
-            'es': 'Spanish', 
-            'fr': 'French',
-            'de': 'German',
-            'it': 'Italian',
-            'pt': 'Portuguese',
-            'zh': 'Chinese',
-            'ja': 'Japanese',
-            'ko': 'Korean',
-            'vi': 'Vietnamese'
+    def __init__(self, device: Optional[str] = None):
+        if device is None:
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+        
+        self.device = device
+        self._log_device_info()
+    
+    def _log_device_info(self) -> None:
+        print(f"[*] Device initialized: {self.device.upper()}")
+        
+        if self.device == "cuda":
+            gpu_name = torch.cuda.get_device_name(0)
+            gpu_memory = torch.cuda.get_device_properties(0).total_memory / (1024**3)
+            print(f"    GPU: {gpu_name} | VRAM: {gpu_memory:.1f} GB")
+    
+    def get_memory_info(self) -> Dict[str, float]:
+        if self.device != "cuda":
+            return {"allocated": 0.0, "reserved": 0.0}
+        
+        return {
+            "allocated": torch.cuda.memory_allocated(0) / (1024**3),
+            "reserved": torch.cuda.memory_reserved(0) / (1024**3)
         }
-        self.session = requests.Session()
-        self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        })
     
-    def translate(self, text, target_language, source_language='en'):
-        """Translate text to target language with retry logic"""
-        if not text or not text.strip():
-            return ""
-        
-        if target_language not in self.supported_languages:
-            raise TranslationError(f"Unsupported target language: {target_language}")
-        
-        # Split long text into chunks
-        max_chunk_size = 5000  # Google Translate limit
-        text_chunks = self._split_text(text, max_chunk_size)
-        
-        translated_chunks = []
-        
-        for chunk in text_chunks:
-            for attempt in range(Config.RETRY_ATTEMPTS):
-                try:
-                    translated_chunk = self._translate_chunk(chunk, target_language, source_language)
-                    if translated_chunk:
-                        translated_chunks.append(translated_chunk)
-                        break
-                    else:
-                        # Fallback to original text
-                        translated_chunks.append(chunk)
-                        break
-                        
-                except Exception as e:
-                    print(f"Translation attempt {attempt + 1} failed: {e}")
-                    if attempt < Config.RETRY_ATTEMPTS - 1:
-                        time.sleep(Config.RETRY_DELAY)
-                    else:
-                        print(f"Failed to translate after {Config.RETRY_ATTEMPTS} attempts")
-                        translated_chunks.append(chunk)
-        
-        return ' '.join(translated_chunks)
+    def clear_cache(self) -> None:
+        if self.device == "cuda":
+            torch.cuda.empty_cache()
+        gc.collect()
+
+
+class ConfigManager:
+    """Centralized configuration access with validation."""
     
-    def _translate_chunk(self, text, target_language, source_language):
-        """Translate a single chunk of text"""
+    def get_language_config(self, lang_code: str) -> Dict[str, Any]:
+        return LANG_DATA.get(lang_code, {})
+    
+    def extract_voice(self, voice_data, fallback_gender: str = "female") -> str:
+        if isinstance(voice_data, list):
+            return voice_data[0] if voice_data else DEFAULT_VOICE
+        if isinstance(voice_data, str):
+            return voice_data
+        return DEFAULT_VOICE
+    
+    def get_voice_pool(self, lang_code: str, gender: str) -> list:
+        lang_config = self.get_language_config(lang_code)
+        voices = lang_config.get('voices', {})
+        pool = voices.get(gender, [DEFAULT_VOICE])
+        
+        if isinstance(pool, str):
+            pool = [pool]
+        
+        return pool
+
+
+class PipelineComponent(ABC):
+    """Base class for pipeline components with shared utilities."""
+    
+    def __init__(self, device_manager: DeviceManager, config_manager: ConfigManager):
+        self.device_manager = device_manager
+        self.config_manager = config_manager
+        self.device = device_manager.device
+    
+    def _validate_file_exists(self, file_path: Path, description: str = "File") -> None:
+        if not file_path.exists():
+            raise FileNotFoundError(f"{description} not found: {file_path}")
+    
+    def _ensure_directory(self, directory: Path) -> None:
+        directory.mkdir(parents=True, exist_ok=True)
+
+
+# =============================================================================
+# MAIN AI/ML ENGINE
+# =============================================================================
+
+class Engine(PipelineComponent):
+    """Central AI/ML engine for YouTube Auto Dub pipeline."""
+    
+    def __init__(self, device: Optional[str] = None, hf_token: Optional[str] = None):
+        device_manager = DeviceManager(device)
+        config_manager = ConfigManager()
+        super().__init__(device_manager, config_manager)
+        
+        self._asr = None
+        self._separator = None
+        self._diarizer = None
+        self.hf_token = hf_token or self._get_huggingface_token()
+        self.translator = GoogleTranslator()
+        
+        print(f"[+] AI Engine initialized successfully")
+    
+    def _get_huggingface_token(self) -> Optional[str]:
+        return os.getenv('HF_TOKEN')
+            
+    @property
+    def asr_model(self):
+        if not self._asr:
+            print(f"[*] Loading Whisper model ({ASR_MODEL}) on {self.device}...")
+            try:
+                from faster_whisper import WhisperModel
+                compute_type = "float16" if self.device == "cuda" else "int8"
+                self._asr = WhisperModel(ASR_MODEL, device=self.device, compute_type=compute_type)
+                print(f"[+] Whisper model loaded successfully")
+            except Exception as e:
+                raise ModelLoadError(f"Failed to load Whisper model: {e}") from e
+        return self._asr
+
+    @property
+    def separator(self):
+        if not self._separator:
+            from src.audio_separation import AudioSeparator
+            self._separator = AudioSeparator(device_manager=self.device_manager)
+        return self._separator
+    
+    @property
+    def diarizer(self):
+        if not self._diarizer:
+            from src.speaker_diarization import SpeakerDiarizer
+            self._diarizer = SpeakerDiarizer(
+                device_manager=self.device_manager, 
+                hf_token=self.hf_token
+            )
+        return self._diarizer
+    
+    def _get_lang_config(self, lang: str) -> Dict:
+        return self.config_manager.get_language_config(lang)
+
+    def _extract_voice_string(self, voice_data: Union[str, List[str], None]) -> str:
+        return self.config_manager.extract_voice(voice_data)
+
+    def release_memory(self, component: Optional[str] = None) -> None:
+        """Release VRAM and clean up GPU memory."""
+        components = []
+        if component in [None, 'asr'] and self._asr:
+            components.append(('asr', self._asr))
+            self._asr = None
+        if component in [None, 'separator'] and self._separator:
+            components.append(('separator', self._separator))
+            self._separator = None
+        if component in [None, 'diarizer'] and self._diarizer:
+            components.append(('diarizer', self._diarizer))
+            self._diarizer = None
+        
+        for name, obj in components:
+            if hasattr(obj, 'release_memory'):
+                obj.release_memory()
+            elif name == 'asr':
+                del obj
+            print(f"[*] {name.title()} VRAM cleared")
+        
+        if components:
+            self.device_manager.clear_cache()
+
+    def transcribe_safe(self, audio_path: Path) -> List[Dict]:
+        """Transcribe audio with automatic memory management."""
         try:
-            url = "https://translate.googleapis.com/translate_a/single"
-            params = {
-                'client': 'gtx',
-                'sl': source_language,
-                'tl': target_language,
-                'dt': 't',
-                'q': text
-            }
-            
-            response = self.session.get(url, params=params, timeout=30)
-            
-            if response.status_code == 200:
-                result = response.json()
-                if result and len(result) > 0 and result[0]:
-                    translated_text = ''.join([item[0] for item in result[0] if item[0]])
-                    return translated_text
+            res = self.transcribe(audio_path)
+            self.release_memory('asr')
+            return res
+        except Exception as e:
+            handle_error(e, "transcription")
+            raise TranscriptionError(f"Transcription failed: {e}") from e
+
+    def translate_safe(self, texts: List[str], target_lang: str) -> List[str]:
+        """Translate texts safely."""
+        self.release_memory()
+        return self.translate(texts, target_lang)
+
+    def transcribe(self, audio_path: Path) -> List[Dict]:
+        segments, _ = self.asr_model.transcribe(str(audio_path), word_timestamps=False, language=None)
+        return [{'start': s.start, 'end': s.end, 'text': s.text.strip()} for s in segments]
+
+    def translate(self, texts: List[str], target_lang: str) -> List[str]:
+        if not texts: return []
+        results = []
+        print(f"[*] Translating {len(texts)} segments to '{target_lang}'...")
+        
+        for i, text in enumerate(texts):
+            try:
+                if not text.strip():
+                    results.append("")
+                    continue
+                
+                translated = self.translator.translate(text, target=target_lang)
+                if translated.startswith(("Error:", "Parse Error:")):
+                    results.append(text)
                 else:
-                    return text
-            else:
-                print(f"Translation API error: {response.status_code}")
-                return text
+                    results.append(translated)
+                
+                time.sleep(random.uniform(0.1, 0.5))
+            except Exception as e:
+                handle_error(e, "translation")
+                raise TranslationError(f"Translation failed: {e}") from e
+                
+        return results
+
+    def synthesize(self, text: str, target_lang: str, gender: str, out_path: Path) -> None:
+        """Synthesize speech. Handles both List and String voice configs."""
+        if not text.strip(): raise ValueError("Text empty")
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        try:
+            lang_cfg = self._get_lang_config(target_lang)
+            voices = lang_cfg.get('voices', {})
+            
+            raw_voice = voices.get(gender)
+            voice = self._extract_voice_string(raw_voice)
+            
+            asyncio.run(edge_tts.Communicate(text, voice=voice).save(str(out_path)))
+            
+            if not validate_audio_file(out_path):
+                raise AudioProcessingError("TTS file invalid")
                 
         except Exception as e:
-            print(f"Translation error: {e}")
-            return text
+            safe_file_delete(out_path)
+            handle_error(e, "TTS synthesis")
+            raise TTSError(f"TTS failed: {e}") from e
+
+    def synthesize_multi_speaker(
+        self, 
+        text: str, 
+        target_lang: str, 
+        speaker_id: str, 
+        out_path: Path,
+        voice_assignments: Optional[Dict[str, str]] = None
+    ) -> None:
+        """Synthesize speech with speaker assignments. Safe for List configs."""
+        if not text.strip(): raise ValueError("Text empty")
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        try:
+            lang_cfg = self._get_lang_config(target_lang)
+            voice = None
+            
+            # 1. Manual/Auto Assignment (Priority)
+            if voice_assignments and speaker_id in voice_assignments:
+                voice = voice_assignments[speaker_id]
+            
+            # 2. Legacy Multi-speaker Config Check
+            if not voice:
+                multi_speakers = lang_cfg.get('multi_speaker', {})
+                spk_key = f"speaker_{int(speaker_id.split('_')[1]):02d}" if speaker_id.startswith('SPEAKER_') else None
+                if spk_key and spk_key in multi_speakers:
+                    voice = multi_speakers[spk_key]
+
+            # 3. Fallback to Gender Pool (Fixed Logic)
+            if not voice:
+                voices = lang_cfg.get('voices', {})
+                raw_voice = voices.get('female')
+                voice = self._extract_voice_string(raw_voice)
+                print(f"[*] Fallback voice for {speaker_id}: {voice}")
+
+            asyncio.run(edge_tts.Communicate(text, voice=voice).save(str(out_path)))
+            
+            if not out_path.exists() or out_path.stat().st_size < 1024:
+                raise RuntimeError("TTS file invalid")
+                
+        except Exception as e:
+            if out_path.exists(): out_path.unlink()
+            handle_error(e, "multi-speaker TTS synthesis")
+            raise TTSError(f"Multi-speaker TTS failed: {e}") from e
+
+    def analyze_speakers(self, audio_path: Path, min_speakers: int = 1, max_speakers: int = 8) -> Dict:
+        """Wrapper for diarization."""
+        try:
+            return self.diarizer.diarize_audio(audio_path, min_speakers, max_speakers)
+        finally:
+            self.release_memory('diarizer')
+
+    def separate_audio(self, audio_path: Path, output_dir: Optional[Path] = None) -> Dict:
+        """Wrapper for separation."""
+        try:
+            return self.separator.separate_audio(audio_path, output_dir)
+        finally:
+            self.release_memory('separator')
+
+
+# =============================================================================
+# PIPELINE ORCHESTRATION
+# =============================================================================
+
+class TranscriptChunker:
+    """Intelligent transcript segmentation for optimal TTS processing."""
     
-    def _split_text(self, text, max_size):
-        """Split text into chunks of maximum size"""
-        if len(text) <= max_size:
-            return [text]
+    def __init__(self, 
+                 min_duration: float = 1.5, 
+                 max_duration: float = 15.0, 
+                 merge_threshold: float = 0.8):
+        self.min_duration = min_duration
+        self.max_duration = max_duration
+        self.merge_threshold = merge_threshold
+    
+    def process(self, segments: List[Dict]) -> List[Dict]:
+        """Process transcript segments into optimized chunks.
+        
+        Args:
+            segments: List of transcript segments with start, end, text keys.
+            
+        Returns:
+            List of optimized chunks.
+        """
+        if not segments:
+            return []
         
         chunks = []
-        current_chunk = ""
+        current_chunk = segments[0].copy()
         
-        # Split by sentences to maintain context
-        sentences = text.split('. ')
-        
-        for sentence in sentences:
-            if len(current_chunk + sentence) <= max_size:
-                current_chunk += sentence + '. '
+        for segment in segments[1:]:
+            gap = segment['start'] - current_chunk['end']
+            duration = current_chunk['end'] - current_chunk['start']
+            
+            # Merge if gap is small and current chunk is not too long
+            if gap < self.merge_threshold and duration < self.max_duration:
+                current_chunk['end'] = segment['end']
+                current_chunk['text'] += ' ' + segment['text']
             else:
-                if current_chunk:
-                    chunks.append(current_chunk.strip())
-                current_chunk = sentence + '. '
+                chunks.append(current_chunk)
+                current_chunk = segment.copy()
         
-        if current_chunk:
-            chunks.append(current_chunk.strip())
-        
+        chunks.append(current_chunk)
         return chunks
-    
-    def detect_language(self, text):
-        """Detect language of text"""
-        try:
-            url = "https://translate.googleapis.com/translate_a/single"
-            params = {
-                'client': 'gtx',
-                'sl': 'auto',
-                'dt': 't',
-                'q': text[:100]  # Use first 100 chars for detection
-            }
-            
-            response = self.session.get(url, params=params)
-            if response.status_code == 200:
-                result = response.json()
-                if result and len(result) > 2:
-                    return result[2]
-            
-            return 'en'  # Default to English
-            
-        except Exception as e:
-            print(f"Language detection error: {e}")
-            return 'en'
 
-class TTSEngine:
-    """Enhanced text-to-speech engine"""
-    
-    def __init__(self):
-        self.supported_voices = {
-            'en': {'male': 'en-US-GuyNeural', 'female': 'en-US-JennyNeural'},
-            'es': {'male': 'es-ES-AlvaroNeural', 'female': 'es-ES-ElviraNeural'},
-            'fr': {'male': 'fr-FR-DenysNeural', 'female': 'fr-FR-DeniseNeural'},
-            'de': {'male': 'de-DE-ConradNeural', 'female': 'de-DE-KatjaNeural'},
-            'it': {'male': 'it-IT-DiegoNeural', 'female': 'it-IT-ElsaNeural'},
-            'pt': {'male': 'pt-BR-AntonioNeural', 'female': 'pt-BR-FranciscaNeural'},
-            'zh': {'male': 'zh-CN-YunxiNeural', 'female': 'zh-CN-XiaoxiaoNeural'},
-            'ja': {'male': 'ja-JP-KeitaNeural', 'female': 'ja-JP-NanamiNeural'},
-            'ko': {'male': 'ko-KR-InJoonNeural', 'female': 'ko-KR-SunHiNeural'},
-            'vi': {'male': 'vi-VN-NamMinhNeural', 'female': 'vi-VN-HoaiMyNeural'}
-        }
-    
-    def synthesize(self, text, language, voice='female'):
-        """Synthesize speech from text with better error handling"""
-        try:
-            if not text or not text.strip():
-                raise TTSError("Empty text for synthesis")
-            
-            if language not in self.supported_voices:
-                raise TTSError(f"Unsupported language: {language}")
-            
-            if voice not in self.supported_voices[language]:
-                voice = 'female'  # Default to female voice
-            
-            voice_name = self.supported_voices[language][voice]
-            
-            # Create output filename
-            timestamp = int(time.time())
-            output_file = os.path.join(Config.TEMP_DIR, f"tts_{language}_{voice}_{timestamp}.wav")
-            
-            # For now, create a placeholder audio file
-            # In real implementation, this would use edge-tts library
-            with open(output_file, 'wb') as f:
-                # Write a simple WAV header and placeholder data
-                f.write(b'RIFF\x24\x08\x00\x00WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00\x40\x1f\x00\x00\x80\x3e\x00\x00\x02\x00\x10\x00data\x00\x08\x00\x00')
-                f.write(b'\x00' * 1000)  # Placeholder audio data
-            
-            print(f"TTS synthesized: {text[:50]}... in {language} ({voice})")
-            return output_file
-            
-        except Exception as e:
-            print(f"TTS error: {e}")
-            return None
-    
-    def get_available_voices(self, language):
-        """Get available voices for language"""
-        return list(self.supported_voices.get(language, {}).keys())
-    
-    def synthesize_long_text(self, text, language, voice='female', max_chunk_size=1000):
-        """Synthesize long text by splitting into chunks"""
-        if not text or not text.strip():
-            return []
-        
-        # Split text into sentences
-        sentences = text.split('. ')
-        chunks = []
-        current_chunk = ""
-        
-        for sentence in sentences:
-            if len(current_chunk + sentence) <= max_chunk_size:
-                current_chunk += sentence + '. '
-            else:
-                if current_chunk:
-                    chunks.append(current_chunk.strip())
-                current_chunk = sentence + '. '
-        
-        if current_chunk:
-            chunks.append(current_chunk.strip())
-        
-        # Synthesize each chunk
-        audio_files = []
-        for i, chunk in enumerate(chunks):
-            print(f"Synthesizing chunk {i+1}/{len(chunks)}")
-            audio_file = self.synthesize(chunk, language, voice)
-            if audio_file and Path(audio_file).exists():
-                audio_files.append(audio_file)
-        
-        return audio_files
 
-class STTEngine:
-    """Enhanced speech-to-text engine"""
+def smart_chunk(segments: List[Dict], max_dur: float = 10.0, min_gap: float = 0.5) -> List[Dict]:
+    """Smart chunking logic."""
+    if not segments: return []
+    chunks = []
+    curr = segments[0].copy()
     
-    def __init__(self):
-        self.supported_languages = ['en', 'es', 'fr', 'de', 'it', 'pt', 'zh', 'ja', 'ko', 'vi']
+    for next_seg in segments[1:]:
+        gap = next_seg['start'] - curr['end']
+        dur = curr['end'] - curr['start']
+        
+        if gap < min_gap and dur < max_dur:
+            curr['end'] = next_seg['end']
+            curr['text'] += " " + next_seg['text']
+        else:
+            chunks.append(curr)
+            curr = next_seg.copy()
     
-    def transcribe(self, audio_file, language='en'):
-        """Transcribe audio to text with better error handling"""
-        try:
-            if not Path(audio_file).exists():
-                print(f"Audio file not found: {audio_file}")
-                return ""
-            
-            print(f"Transcribing {audio_file} in {language}")
-            
-            # Placeholder transcription
-            # In real implementation, this would use faster-whisper
-            filename = Path(audio_file).name
-            placeholder_text = f"This is a placeholder transcription of {filename} in {language}. "
-            placeholder_text += "The actual implementation would use faster-whisper to convert speech to text accurately."
-            
-            return placeholder_text
-            
-        except Exception as e:
-            print(f"STT error: {e}")
-            return ""
-    
-    def transcribe_with_timestamps(self, audio_file, language='en'):
-        """Transcribe audio with timestamps - placeholder"""
-        try:
-            transcription = self.transcribe(audio_file, language)
-            
-            # Placeholder with simple timestamps
-            return [
-                {
-                    'start': 0,
-                    'end': 10,
-                    'text': transcription[:len(transcription)//2],
-                    'confidence': 0.9
-                },
-                {
-                    'start': 10,
-                    'end': 20,
-                    'text': transcription[len(transcription)//2:],
-                    'confidence': 0.85
-                }
-            ]
-            
-        except Exception as e:
-            print(f"STT with timestamps error: {e}")
-            return []
-
-class DiarizationEngine:
-    """Enhanced speaker diarization engine"""
-    
-    def __init__(self):
-        pass
-    
-    def segment_speakers(self, audio_file):
-        """Segment audio by speakers - placeholder"""
-        try:
-            if not Path(audio_file).exists():
-                print(f"Audio file not found: {audio_file}")
-                return []
-            
-            print(f"Segmenting speakers in {audio_file}")
-            
-            # Placeholder diarization
-            # In real implementation, this would use pyannote.audio
-            segments = [
-                {'start': 0, 'end': 5, 'speaker': 'speaker_0', 'confidence': 0.9},
-                {'start': 5, 'end': 10, 'speaker': 'speaker_1', 'confidence': 0.85},
-                {'start': 10, 'end': 15, 'speaker': 'speaker_0', 'confidence': 0.88}
-            ]
-            
-            return segments
-            
-        except Exception as e:
-            print(f"Diarization error: {e}")
-            return []
+    chunks.append(curr)
+    print(f"[*] Smart chunking: {len(segments)} -> {len(chunks)}")
+    return chunks

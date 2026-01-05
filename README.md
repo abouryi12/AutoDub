@@ -1,82 +1,347 @@
-# YouTube Auto Dub - Day 06
+# YouTube Auto Dub
 
-## Project Overview
-YouTube Auto Dub is a tool to automatically dub YouTube videos into different languages.
+An automated video dubbing pipeline that transcribes, translates, and dubs YouTube videos using AI/ML technologies.
 
-## Features (Planned)
-- YouTube video downloading
-- Audio extraction and processing
-- Speech-to-text transcription
-- Text translation
-- Voice synthesis
-- Audio mixing and video reconstruction
+## 🎯 Overview
 
-## Current Status
-Day 06: Enhanced audio processing and file handling.
+YouTube Auto Dub is a comprehensive Python pipeline that automatically:
+1. **Downloads** YouTube videos and audio
+2. **Transcribes** speech using Whisper AI
+3. **Translates** text to target languages via Google Translate
+4. **Synthesizes** speech using Edge TTS with natural voices
+5. **Synchronizes** audio timing with original video
+6. **Renders** final dubbed video with perfect lip-sync
 
-## New Features
-- **Enhanced Audio Processing**: Audio chunking, normalization, and merging
-- **Better File Handling**: Unique filename generation, progress saving/loading
-- **Retry Logic**: Automatic retry for failed downloads and processing
-- **Audio Pipeline**: Complete audio processing workflow with chunking
-- **Improved Error Handling**: Custom exceptions for all error types
-- **Progress Tracking**: Save and resume processing progress
-- **Duration Formatting**: Human-readable duration display
+## ✨ Features
 
-## Key Components
-- `media.py`: Enhanced audio/video processing with chunking and merging
-- `core_utils.py`: Better file handling and progress tracking
-- `youtube.py`: Retry logic and thumbnail downloading
-- `engines.py`: Enhanced translation with text chunking
-- `main.py`: Complete audio processing pipeline
+### 🤖 AI-Powered Processing
+- **Whisper ASR**: State-of-the-art speech transcription with high accuracy
+- **Google Translate**: Reliable translation supporting 100+ languages
+- **Edge TTS**: High-quality neural voices with natural prosody
+- **Smart Chunking**: Intelligent audio segmentation for optimal TTS
 
-## Audio Processing Pipeline
-1. Download audio from YouTube
-2. Extract audio information
-3. Split audio into 30-second chunks
-4. Transcribe each chunk
-5. Combine transcriptions
-6. Translate full text
-7. Synthesize translated speech
+### 🎬 Video Processing
+- **Format Support**: MP4, WebM, AVI and more via yt-dlp
+- **Quality Preservation**: Original video quality maintained
+- **Audio Sync**: Precise timing alignment with original video
+- **Gap Filling**: Automatic silence generation for seamless audio
 
-## File Management
-- Automatic temp file cleanup
-- Unique filename generation with timestamps
-- Progress saving to JSON files
-- File size validation and monitoring
+### 🌍 Language Support
+- **100+ Languages**: Comprehensive language coverage via Google Translate
+- **Voice Selection**: Male/female voice options for most languages
+- **Automatic Detection**: Smart language detection and voice mapping
+- **Custom Voices**: Configurable voice preferences per language
 
-## Error Handling
-- Retry logic for network operations
-- Custom exceptions for different error types
-- Graceful fallbacks for failed operations
-- Detailed error logging
+### ⚡ Performance
+- **GPU Acceleration**: CUDA support for faster Whisper processing
+- **Caching System**: Intelligent caching to avoid re-downloads
+- **Parallel Processing**: Optimized pipeline for faster execution
+- **Memory Management**: Automatic cleanup and resource optimization
 
-## Installation
+## 🚀 Quick Start
+
+### Prerequisites
+
+1. **Python 3.8+** installed
+2. **FFmpeg** installed and added to PATH
+   - Windows: [Download FFmpeg](https://ffmpeg.org/download.html)
+   - macOS: `brew install ffmpeg`
+   - Linux: `sudo apt install ffmpeg`
+
+3. **Optional: CUDA** for GPU acceleration
+   - Install [CUDA Toolkit](https://developer.nvidia.com/cuda-toolkit)
+   - Install CUDA PyTorch: `pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118`
+
+### Installation
+
 ```bash
+# Clone the repository
+git clone https://github.com/your-username/youtube-auto-dub.git
+cd youtube-auto-dub
+
+# Install Python dependencies
 pip install -r requirements.txt
+
+# Verify installation
+python main.py --help
 ```
 
-**Note**: Requires FFmpeg to be installed and available in PATH.
+### Basic Usage
 
-## Usage
 ```bash
-python main.py
+# Basic dubbing to Spanish
+python main.py "https://youtube.com/watch?v=VIDEO_ID" --lang es
+
+# With female voice and GPU acceleration
+python main.py "https://youtube.com/watch?v=VIDEO_ID" --lang fr --gender female --gpu
+
+# Using browser authentication for private videos
+python main.py "https://youtube.com/watch?v=VIDEO_ID" --lang ja --browser chrome
+
+# Using cookies file
+python main.py "https://youtube.com/watch?v=VIDEO_ID" --lang de --cookies cookies.txt
 ```
 
-## Dependencies
-- yt-dlp: YouTube video downloading
-- requests: HTTP requests and translation API
-- edge-tts: Text-to-speech synthesis
-- numpy: Array processing
-- librosa: Audio analysis
-- ffmpeg-python: FFmpeg Python bindings
-- tqdm: Progress bars
-- colorama: Colored terminal output
+## 📖 Usage Guide
 
-## Next Steps
-- Implement actual speech-to-text with Faster-Whisper
-- Add real speaker diarization with Pyannote
-- Implement audio separation with Demucs
-- Add video reconstruction pipeline
-- Add GUI interface
-- Implement batch processing
+### Command Line Options
+
+| Option | Description | Example |
+|--------|-------------|---------|
+| `url` | YouTube video URL (required) | `"https://youtube.com/watch?v=VIDEO_ID"` |
+| `--lang, -l` | Target language code | `--lang es` (Spanish) |
+| `--gender, -g` | Voice gender | `--gender female` |
+| `--browser, -b` | Browser for cookies | `--browser chrome` |
+| `--cookies, -c` | Cookies file path | `--cookies cookies.txt` |
+| `--gpu` | Use GPU acceleration | `--gpu` |
+
+### Supported Languages
+
+Popular language codes:
+- `es` - Spanish
+- `fr` - French  
+- `de` - German
+- `it` - Italian
+- `pt` - Portuguese
+- `ja` - Japanese
+- `ko` - Korean
+- `zh` - Chinese
+- `ar` - Arabic
+- `hi` - Hindi
+- `ru` - Russian
+- `vi` - Vietnamese
+- `th` - Thai
+- And many more...
+
+### Authentication Methods
+
+For private or age-restricted videos:
+
+#### Method 1: Browser Cookies (Recommended)
+```bash
+# Close browser first, then:
+python main.py "URL" --lang es --browser chrome
+```
+
+#### Method 2: Cookies File
+```bash
+# Export cookies using browser extension, then:
+python main.py "URL" --lang es --cookies cookies.txt
+```
+
+## 🏗️ Architecture
+
+### Pipeline Stages
+
+```
+YouTube URL → Download → Transcribe → Chunk → Translate → TTS → Sync → Render → Output
+```
+
+### Core Components
+
+- **`main.py`**: CLI interface and pipeline orchestration
+- **`src/config.py`**: Configuration management and validation
+- **`src/engines.py`**: AI/ML engines (Whisper, Translator, TTS)
+- **`src/youtube.py`**: YouTube content downloading
+- **`src/media.py`**: Audio/video processing with FFmpeg
+- **`src/core.py`**: High-level pipeline orchestration
+
+### AI Models Used
+
+- **Whisper**: OpenAI's speech recognition model
+- **Google Translate**: Web scraping for translation
+- **Edge TTS**: Microsoft's neural text-to-speech
+
+## 🛠️ Configuration
+
+### Language Configuration
+
+Edit `language_map.json` to customize voice mappings:
+
+```json
+{
+  "es": {
+    "name": "Spanish",
+    "voices": {
+      "female": "es-ES-ElviraNeural",
+      "male": "es-ES-JorgeNeural"
+    }
+  }
+}
+```
+
+### Audio Settings
+
+Modify `src/config.py` for audio parameters:
+
+```python
+SAMPLE_RATE = 24000      # Audio sample rate (Hz)
+AUDIO_CHANNELS = 1       # Mono audio
+ASR_MODEL = "base"       # Whisper model size
+```
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+#### 1. FFmpeg Not Found
+```
+[!] CRITICAL: Missing dependencies: ffmpeg, ffprobe
+```
+**Solution**: Install FFmpeg and add to system PATH
+
+#### 2. CUDA Errors
+```
+[!] ERROR: CUDA out of memory
+```
+**Solution**: Use CPU mode or reduce batch size
+```bash
+python main.py "URL" --lang es  # CPU mode
+```
+
+#### 3. Authentication Failed
+```
+[!] YouTube authentication failed
+```
+**Solution**: 
+- Close browser completely before using `--browser`
+- Export fresh cookies.txt file
+- Check if video is public/accessible
+
+#### 4. TTS Voice Not Available
+```
+[!] WARNING: TTS output file is very small
+```
+**Solution**: 
+- Check language code is correct
+- Try different gender option
+- Some voices may be region-restricted
+
+#### 5. Download Failures
+```
+[!] ERROR: yt-dlp extraction failed
+```
+**Solution**:
+- Update yt-dlp: `pip install --upgrade yt-dlp`
+- Check video URL is valid
+- Use authentication for private videos
+
+### Performance Optimization
+
+#### For Faster Processing
+```bash
+# Use GPU acceleration
+python main.py "URL" --lang es --gpu
+
+# Use smaller Whisper model (faster but less accurate)
+# Edit src/config.py: ASR_MODEL = "tiny"
+```
+
+#### For Better Quality
+```bash
+# Use larger Whisper model (slower but more accurate)
+# Edit src/config.py: ASR_MODEL = "large"
+
+# Higher quality audio (larger files)
+# Edit src/config.py: SAMPLE_RATE = 44100
+```
+
+## 📁 Project Structure
+
+```
+youtube-auto-dub/
+├── main.py                 # CLI entry point
+├── requirements.txt        # Python dependencies
+├── language_map.json      # Language-to-voice mappings
+├── README.md              # This file
+├── src/                   # Source code
+│   ├── config.py          # Configuration management
+│   ├── engines.py         # AI/ML engines
+│   ├── youtube.py         # YouTube downloader
+│   ├── media.py           # Audio/video processing
+│   ├── core.py            # Pipeline orchestration
+│   └── googlev4.py        # Google Translate scraper
+├── tests/                 # Test files
+├── .cache/               # Downloaded YouTube content
+├── output/               # Final dubbed videos
+└── temp/                 # Temporary processing files
+```
+
+## 🧪 Development
+
+### Running Tests
+
+```bash
+# Install test dependencies
+pip install pytest pytest-cov
+
+# Run tests
+pytest tests/
+
+# Run with coverage
+pytest --cov=src tests/
+```
+
+### Code Style
+
+The project follows Google Style docstrings and includes:
+- Comprehensive function documentation
+- Type hints for all functions
+- Error handling with descriptive messages
+- TODO and NOTE comments for future improvements
+
+### Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make changes with proper documentation
+4. Add tests for new functionality
+5. Submit a pull request
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+### Dependencies License
+
+Most dependencies are open-source:
+- **PyTorch**: BSD/Apache 2.0
+- **faster-whisper**: MIT
+- **yt-dlp**: Unlicense
+- **Edge TTS**: MIT (uses Microsoft service)
+- **librosa**: ISC
+
+## 🤝 Acknowledgments
+
+- **OpenAI** for Whisper speech recognition
+- **Microsoft** for Edge TTS neural voices
+- **yt-dlp** team for YouTube downloading
+- **Google** for Translate service
+- **FFmpeg** team for media processing
+
+## 📞 Support
+
+- 🐛 **Bug Reports**: [GitHub Issues](https://github.com/your-username/youtube-auto-dub/issues)
+- 💡 **Feature Requests**: [GitHub Discussions](https://github.com/your-username/youtube-auto-dub/discussions)
+- 📧 **Email**: your-email@example.com
+
+## 🔄 Changelog
+
+### Version 2.0
+- ✨ Complete documentation overhaul with Google/OpenAI style docstrings
+- 🚀 Enhanced error handling and user feedback
+- 🌍 Improved language support and voice mapping
+- ⚡ Better memory management and GPU optimization
+- 🛠️ Comprehensive configuration options
+- 📖 Detailed troubleshooting guide
+
+### Version 1.0
+- 🎉 Initial release with basic dubbing pipeline
+- 🤖 Whisper transcription integration
+- 🗣️ Edge TTS synthesis
+- 🌐 Google Translate integration
+- 📹 YouTube video processing
+
+---
+
+**Made with ❤️ by the YouTube Auto Dub Team**

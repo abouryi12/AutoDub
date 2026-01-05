@@ -1,30 +1,193 @@
-# YouTube Auto Dub Requirements - Day 06
-# Enhanced dependencies for improved audio processing
+# YouTube Auto Dub - Dependencies
+# 
+# This file contains all Python dependencies required for the YouTube Auto Dub
+# pipeline. Dependencies are organized by category with version constraints
+# to ensure compatibility and stability.
+#
+# Installation:
+#   pip install -r requirements.txt
+#
+# For GPU support, install CUDA version of PyTorch:
+#   pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+#
+# Author: YouTube Auto Dub Team
+# Version: 2.0
+# Python: 3.8+
 
-# YouTube downloading
-yt-dlp>=2023.1.0
+# =============================================================================
+# CORE AI/ML LIBRARIES
+# =============================================================================
+# These are the essential ML libraries for speech processing and translation
 
-# Basic utilities
-requests>=2.28.0
+# PyTorch - Core ML framework with CUDA support
+# NOTE: Install CUDA version for GPU acceleration
+torch>=2.0.0,<3.0.0
 
-# File handling
-pathlib2>=2.3.0
+# Transformers - Hugging Face library (used for NLLB model, deprecated but kept)
+# DEPRECATED: Currently using Google Translate instead, but kept for compatibility
+transformers>=4.35.0,<5.0.0
 
-# Audio processing
-numpy>=1.21.0
-librosa>=0.9.0
+# Faster Whisper - Optimized Whisper implementation for speech transcription
+# NOTE: This is significantly faster than the original OpenAI Whisper
+faster-whisper>=0.9.0,<1.0.0
 
-# Media processing (requires ffmpeg)
-ffmpeg-python>=0.2.0
+# =============================================================================
+# YOUTUBE AND MEDIA PROCESSING
+# =============================================================================
+# Libraries for downloading and processing YouTube content
 
-# Translation and TTS
-edge-tts>=6.1.0
+# yt-dlp - YouTube downloader with extensive format support
+# NOTE: Fork of youtube-dl with better maintenance and features
+yt-dlp>=2023.12.0
 
-# Future dependencies (placeholders)
-# faster-whisper>=0.2.0
-# pyannote.audio>=2.0.0
-# demucs>=3.0.0
+# FFmpeg Python bindings (optional, mainly for development)
+# NOTE: FFmpeg binary must be installed separately on system
+# ffmpeg-python>=0.2.0
 
-# Additional utilities for enhanced processing
-tqdm>=4.64.0  # Progress bars
-colorama>=0.4.4  # Colored output
+# =============================================================================
+# TEXT-TO-SPEECH (TTS)
+# =============================================================================
+# Voice synthesis for generating dubbed audio
+
+# Edge TTS - Microsoft Edge TTS (free, high-quality neural voices)
+# NOTE: No API keys required, uses Microsoft's public TTS service
+edge-tts>=6.1.0,<7.0.0
+
+# Alternative TTS options (commented out by default)
+# Uncomment if you need alternatives to Edge TTS:
+# kokoro>=0.1.0      # Local TTS engine
+# gtts>=2.3.0         # Google Translate TTS (requires internet)
+# pyttsx3>=2.90       # Offline TTS (lower quality)
+
+# =============================================================================
+# AUDIO PROCESSING AND ANALYSIS
+# =============================================================================
+# Libraries for audio manipulation and analysis
+
+# librosa - Audio analysis and processing
+# NOTE: Used for advanced audio features and analysis
+librosa>=0.10.0,<1.0.0
+
+# soundfile - Audio file I/O
+# NOTE: Backend for librosa, supports various audio formats
+soundfile>=0.12.0,<1.0.0
+
+# NumPy - Numerical computing foundation
+# NOTE: Core dependency for most audio processing libraries
+numpy>=1.24.0,<2.0.0
+
+# Demucs - Source separation for background/vocals splitting
+# NOTE: Meta's state-of-the-art music source separation model
+demucs>=4.0.0,<5.0.0
+
+# =============================================================================
+# SPEAKER DIARIZATION
+# =============================================================================
+# Libraries for speaker identification and segmentation
+
+# pyannote.audio - Speaker diarization and speech processing
+# NOTE: State-of-the-art speaker diarization pipeline
+# Requires Hugging Face token: https://huggingface.co/pyannote/speaker-diarization-3.1
+pyannote.audio>=3.1.0,<4.0.0
+
+# =============================================================================
+# ADVANCED AUDIO PROCESSING
+# =============================================================================
+# Additional libraries for enhanced audio processing capabilities
+
+# torch-audio - Audio processing extensions for PyTorch
+# NOTE: Required for advanced audio transformations and Demucs
+torchaudio>=2.0.0,<3.0.0
+
+# =============================================================================
+# UTILITY LIBRARIES
+# =============================================================================
+# General purpose utilities and helpers
+
+# pathlib2 - Enhanced pathlib (for Python < 3.4 compatibility)
+# NOTE: Not needed for modern Python but kept for broader compatibility
+# pathlib2>=2.3.0
+
+# Requests - HTTP library for web requests
+# NOTE: Used for Google Translate web scraping and API calls
+requests>=2.31.0,<3.0.0
+
+# =============================================================================
+# DEVELOPMENT AND TESTING (OPTIONAL)
+# =============================================================================
+# Uncomment these if you're developing or testing the pipeline
+
+# pytest - Testing framework
+# pytest>=7.4.0,<8.0.0
+
+# pytest-cov - Coverage reporting for pytest
+# pytest-cov>=4.1.0,<5.0.0
+
+# =============================================================================
+# GPU ACCELERATION (OPTIONAL)
+# =============================================================================
+# Uncomment for CUDA support if you have NVIDIA GPU
+
+# PyTorch Audio with CUDA support
+# NOTE: Replace cu118 with your CUDA version (cu117, cu118, cu121, etc.)
+# torch-audio>=2.0.0 --index-url https://download.pytorch.org/whl/cu118
+
+# =============================================================================
+# SYSTEM REQUIREMENTS
+# =============================================================================
+# These are NOT Python packages but system dependencies:
+
+# 1. FFmpeg - Required for all audio/video processing
+#    - Windows: Download from https://ffmpeg.org/download.html
+#    - macOS: brew install ffmpeg
+#    - Linux: sudo apt install ffmpeg or sudo yum install ffmpeg
+#
+# 2. CUDA Toolkit (optional, for GPU acceleration)
+#    - Download from https://developer.nvidia.com/cuda-toolkit
+#    - Recommended version: 11.8 or 12.x
+#
+# 3. Git (for cloning and version control)
+#    - Windows: https://git-scm.com/download/win
+#    - macOS: brew install git
+#    - Linux: sudo apt install git
+
+# =============================================================================
+# VERSION NOTES
+# =============================================================================
+# - PyTorch 2.0+ provides significant performance improvements
+# - faster-whisper 0.9+ includes important bug fixes
+# - yt-dlp is actively updated, use latest stable version
+# - Edge TTS versions may change voice availability
+#
+# =============================================================================
+# TROUBLESHOOTING
+# =============================================================================
+# Common issues and solutions:
+#
+# 1. PyTorch CUDA errors:
+#    - Install CUDA version matching your system: 
+#      pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+#
+# 2. FFmpeg not found:
+#    - Install FFmpeg and add to system PATH
+#    - Verify with: ffmpeg -version
+#
+# 3. TTS voice not available:
+#    - Check Edge TTS version compatibility
+#    - Some voices may be region-restricted
+#
+# 4. YouTube download failures:
+#    - Update yt-dlp: pip install --upgrade yt-dlp
+#    - Use authentication cookies for private videos
+#
+# =============================================================================
+# LICENSE INFORMATION
+# =============================================================================
+# Most dependencies are open-source:
+# - PyTorch: BSD/Apache 2.0
+# - faster-whisper: MIT
+# - yt-dlp: Unlicense
+# - Edge TTS: MIT (uses Microsoft service)
+# - librosa: ISC
+#
+# Always check individual package licenses for compliance.

@@ -1,347 +1,512 @@
 """
-Media Processing Module - Day 06
-Enhanced audio and video processing with better file handling
+Media Processing Module for YouTube Auto Dub.
+
+This module handles all audio/video processing operations using FFmpeg.
+It provides functionality for:
+- Audio duration detection and analysis
+- Silence generation for gap filling
+- Audio time-stretching and duration fitting
+- Video concatenation and rendering
+- Audio synchronization and mixing
+
+All operations use FFmpeg as the backend for maximum compatibility
+and quality. The module includes comprehensive error handling and
+validation for all media operations.
+
+Author: YouTube Auto Dub Team
+Version: 2.0
 """
 
-import os
 import subprocess
-import json
+import datetime
 from pathlib import Path
-from core_utils import AudioError, MediaError, Config, format_duration, FileError
+from typing import List, Dict, Optional, Union
 
-class AudioProcessor:
-    """Enhanced audio processing functionality"""
-    
-    def __init__(self):
-        self.sample_rate = Config.AUDIO_SAMPLE_RATE
-        self.channels = Config.AUDIO_CHANNELS
-        self.chunk_duration = Config.AUDIO_CHUNK_DURATION
-    
-    def extract_audio(self, video_file):
-        """Extract audio from video file"""
-        try:
-            output_file = os.path.join(
-                Config.TEMP_DIR, 
-                f"extracted_audio.{Config.AUDIO_FORMAT}"
-            )
-            
-            # Use ffmpeg to extract audio
-            cmd = [
-                'ffmpeg', '-i', video_file,
-                '-ar', str(self.sample_rate),
-                '-ac', str(self.channels),
-                '-y', output_file
-            ]
-            
-            result = subprocess.run(cmd, capture_output=True, text=True)
-            
-            if result.returncode == 0 and Path(output_file).exists():
-                print(f"Audio extracted successfully: {output_file}")
-                return output_file
-            else:
-                print(f"FFmpeg error: {result.stderr}")
-                return None
-                
-        except Exception as e:
-            print(f"Error extracting audio: {e}")
-            return None
-    
-    def convert_format(self, input_file, output_format):
-        """Convert audio to different format"""
-        try:
-            input_path = Path(input_file)
-            output_file = input_path.with_suffix(f'.{output_format}')
-            
-            cmd = ['ffmpeg', '-i', str(input_path), '-y', str(output_file)]
-            result = subprocess.run(cmd, capture_output=True, text=True)
-            
-            if result.returncode == 0 and output_file.exists():
-                return str(output_file)
-            else:
-                return None
-                
-        except Exception as e:
-            print(f"Error converting format: {e}")
-            return None
-    
-    def get_audio_info(self, audio_file):
-        """Get detailed audio information"""
-        try:
-            cmd = [
-                'ffprobe', '-v', 'quiet', '-print_format', 'json',
-                '-show_format', '-show_streams', str(audio_file)
-            ]
-            
-            result = subprocess.run(cmd, capture_output=True, text=True)
-            
-            if result.returncode == 0:
-                info = json.loads(result.stdout)
-                
-                for stream in info.get('streams', []):
-                    if stream.get('codec_type') == 'audio':
-                        duration = float(stream.get('duration', 0))
-                        return {
-                            'duration': duration,
-                            'duration_formatted': format_duration(duration),
-                            'sample_rate': stream.get('sample_rate'),
-                            'channels': stream.get('channels'),
-                            'codec': stream.get('codec_name'),
-                            'bit_rate': stream.get('bit_rate'),
-                            'size': int(info.get('format', {}).get('size', 0))
-                        }
-            
-            return None
-            
-        except Exception as e:
-            print(f"Error getting audio info: {e}")
-            return None
-    
-    def split_audio(self, audio_file, chunk_duration=None):
-        """Split audio into chunks with better error handling"""
-        if chunk_duration is None:
-            chunk_duration = self.chunk_duration
-            
-        try:
-            # Get audio info first
-            audio_info = self.get_audio_info(audio_file)
-            if not audio_info:
-                print(f"Could not get audio info for {audio_file}")
-                return []
-            
-            duration = audio_info['duration']
-            if duration <= chunk_duration:
-                print(f"Audio is shorter than chunk duration ({duration}s <= {chunk_duration}s)")
-                return [audio_file]
-            
-            output_pattern = os.path.join(Config.TEMP_DIR, "chunk_%04d.wav")
-            
-            cmd = [
-                'ffmpeg', '-i', audio_file,
-                '-f', 'segment',
-                '-segment_time', str(chunk_duration),
-                '-acodec', 'copy',
-                '-y', output_pattern
-            ]
-            
-            result = subprocess.run(cmd, capture_output=True, text=True)
-            
-            if result.returncode == 0:
-                # Return list of chunk files
-                chunks = list(Path(Config.TEMP_DIR).glob("chunk_*.wav"))
-                chunk_files = [str(chunk) for chunk in sorted(chunks)]
-                
-                print(f"Audio split into {len(chunk_files)} chunks")
-                return chunk_files
-            else:
-                print(f"Error splitting audio: {result.stderr}")
-                return []
-                
-        except Exception as e:
-            print(f"Error splitting audio: {e}")
-            return []
-    
-    def merge_audio_files(self, audio_files, output_file):
-        """Merge multiple audio files into one"""
-        try:
-            if not audio_files:
-                raise AudioError("No audio files to merge")
-            
-            if len(audio_files) == 1:
-                return audio_files[0]
-            
-            # Create input list for ffmpeg
-            input_args = []
-            for audio_file in audio_files:
-                input_args.extend(['-i', audio_file])
-            
-            # Filter to concatenate inputs
-            filter_complex = f"concat=n={len(audio_files)}:v=0:a=1[out]"
-            
-            cmd = ['ffmpeg'] + input_args + [
-                '-filter_complex', filter_complex,
-                '-map', '[out]',
-                '-y', output_file
-            ]
-            
-            result = subprocess.run(cmd, capture_output=True, text=True)
-            
-            if result.returncode == 0 and Path(output_file).exists():
-                print(f"Audio files merged successfully: {output_file}")
-                return output_file
-            else:
-                print(f"Error merging audio: {result.stderr}")
-                return None
-                
-        except Exception as e:
-            print(f"Error merging audio files: {e}")
-            return None
-    
-    def normalize_audio(self, audio_file, output_file=None):
-        """Normalize audio levels"""
-        try:
-            if output_file is None:
-                output_file = os.path.join(Config.TEMP_DIR, f"normalized_{Path(audio_file).name}")
-            
-            cmd = [
-                'ffmpeg', '-i', audio_file,
-                '-af', 'loudnorm=I=-16:TP=-1.5:LRA=11',
-                '-y', output_file
-            ]
-            
-            result = subprocess.run(cmd, capture_output=True, text=True)
-            
-            if result.returncode == 0 and Path(output_file).exists():
-                print(f"Audio normalized: {output_file}")
-                return output_file
-            else:
-                print(f"Error normalizing audio: {result.stderr}")
-                return None
-                
-        except Exception as e:
-            print(f"Error normalizing audio: {e}")
-            return None
+# Import configuration for audio parameters
+from src.engines import SAMPLE_RATE, AUDIO_CHANNELS
 
-class VideoProcessor:
-    """Enhanced video processing functionality"""
+def get_duration(path: Path) -> float:
+    """Get the duration of an audio/video file using FFprobe.
     
-    def __init__(self):
-        pass
+    This function uses FFprobe to accurately determine the duration
+    of media files. It handles various audio and video formats.
     
-    def get_video_info(self, video_file):
-        """Get detailed video information"""
+    Args:
+        path: Path to the media file.
+        
+    Returns:
+        Duration in seconds. Returns 0.0 if duration cannot be determined.
+        
+    Raises:
+        FileNotFoundError: If the media file doesn't exist.
+        
+    Example:
+        >>> duration = get_duration(Path("audio.mp3"))
+        >>> print(f"Duration: {duration:.2f} seconds")
+        
+    NOTE: This function is tolerant of errors and returns 0.0
+    instead of raising exceptions for robustness in the pipeline.
+    """
+    if not path.exists():
+        print(f"[!] ERROR: Media file not found: {path}")
+        return 0.0
+    
+    try:
+        # FFprobe command to get duration
+        cmd = [
+            'ffprobe', '-v', 'error', 
+            '-show_entries', 'format=duration',
+            '-of', 'default=noprint_wrappers=1:nokey=1', 
+            str(path)
+        ]
+        
+        # Run FFprobe and capture output
+        result = subprocess.run(
+            cmd, 
+            capture_output=True, 
+            text=True, 
+            check=True,
+            timeout=30  # 30 second timeout
+        )
+        
+        # Parse duration from output
+        duration_str = result.stdout.strip()
+        if duration_str:
+            return float(duration_str)
+        else:
+            print(f"[!] WARNING: No duration data for {path}")
+            return 0.0
+            
+    except subprocess.TimeoutExpired:
+        print(f"[!] ERROR: FFprobe timeout for {path}")
+        return 0.0
+    except subprocess.CalledProcessError as e:
+        print(f"[!] ERROR: FFprobe failed for {path}: {e}")
+        return 0.0
+    except ValueError as e:
+        print(f"[!] ERROR: Invalid duration format for {path}: {e}")
+        return 0.0
+    except Exception as e:
+        print(f"[!] ERROR: Unexpected error getting duration for {path}: {e}")
+        return 0.0
+
+def generate_silence(duration: float, out_path: Path) -> None:
+    """Generate a silence audio file using FFmpeg.
+    
+    This function creates a silence audio file that can be used for
+    gap filling in audio concatenation operations. The silence is
+    generated at the project's sample rate and channel configuration.
+    
+    Args:
+        duration: Duration of silence in seconds.
+        out_path: Output path for the silence file.
+        
+    Raises:
+        RuntimeError: If FFmpeg fails to generate silence.
+        ValueError: If duration is invalid.
+        
+    Example:
+        >>> generate_silence(5.0, Path("silence.wav"))
+        >>> print("Silence file generated")
+        
+    NOTE: If the output file already exists, this function skips
+    generation to save time. Use force=True to override.
+    """
+    # Validate inputs
+    if duration <= 0:
+        raise ValueError(f"Duration must be positive, got {duration}")
+    if not out_path.parent.exists():
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    # Skip generation if file already exists
+    if out_path.exists():
+        print(f"[*] Silence file already exists: {out_path}")
+        return
+    
+    try:
+        print(f"[*] Generating {duration:.1f}s silence: {out_path.name}")
+        
+        # FFmpeg command to generate silence
+        cmd = [
+            'ffmpeg', '-y', '-v', 'error',
+            '-f', 'lavfi', 
+            '-i', f'anullsrc=r={SAMPLE_RATE}:cl=mono',
+            '-t', str(duration),
+            '-c:a', 'pcm_s16le',  # 16-bit PCM WAV
+            str(out_path)
+        ]
+        
+        # Run FFmpeg
+        subprocess.run(cmd, check=True, timeout=60)
+        
+        # Verify output file was created
+        if not out_path.exists():
+            raise RuntimeError(f"Silence file not created: {out_path}")
+            
+        # Verify file size is reasonable
+        file_size = out_path.stat().st_size
+        expected_size = SAMPLE_RATE * 2 * duration  # 16-bit mono
+        if file_size < expected_size * 0.9:  # Allow 10% tolerance
+            print(f"[!] WARNING: Silence file may be corrupted: {file_size} bytes")
+        
+        print(f"[+] Silence generated successfully: {out_path}")
+        
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(f"FFmpeg timeout generating silence: {out_path}")
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(f"FFmpeg failed to generate silence: {e}")
+    except Exception as e:
+        raise RuntimeError(f"Unexpected error generating silence: {e}")
+
+def fit_audio(audio_path: Path, target_dur: float, max_speedup: float = 1.8) -> Path:
+    """Fit audio duration to target duration using time-stretching.
+    
+    This function adjusts the duration of an audio file to match a target
+    duration. It uses FFmpeg's atempo filter for time-stretching without
+    changing pitch. If the speedup ratio is too high, it clamps to prevent
+    extreme audio distortion.
+    
+    Args:
+        audio_path: Path to the input audio file.
+        target_dur: Target duration in seconds.
+        max_speedup: Maximum speedup ratio allowed (default: 1.8).
+                    Higher values may cause significant audio quality degradation.
+                    
+    Returns:
+        Path to the processed audio file. If no processing is needed,
+        returns the original path.
+        
+    Raises:
+        FileNotFoundError: If input audio file doesn't exist.
+        RuntimeError: If audio processing fails.
+        
+    Example:
+        >>> fitted_audio = fit_audio(Path("speech.mp3"), 5.0)
+        >>> print(f"Audio fitted to 5.0 seconds")
+        
+    NOTE: This function prioritizes timing accuracy over audio quality.
+    For extreme speedup ratios, audio may sound unnatural but will
+    maintain synchronization with the video timeline.
+    
+    TODO: Add quality options for better audio preservation.
+    """
+    if not audio_path.exists():
+        raise FileNotFoundError(f"Audio file not found: {audio_path}")
+    
+    if target_dur <= 0:
+        raise ValueError(f"Target duration must be positive, got {target_dur}")
+    
+    # Get actual audio duration
+    actual_dur = get_duration(audio_path)
+    if actual_dur == 0.0:
+        print(f"[!] WARNING: Cannot determine duration for {audio_path}, returning original")
+        return audio_path
+    
+    # Tolerance for floating point errors (100ms)
+    tolerance = 0.1
+    
+    # If audio is already within tolerance, return original
+    if actual_dur <= target_dur + tolerance:
+        print(f"[*] Audio duration {actual_dur:.2f}s already fits target {target_dur:.2f}s")
+        return audio_path
+    
+    # Calculate speedup ratio
+    ratio = actual_dur / target_dur
+    
+    # Clamp ratio to maximum allowed speedup
+    if ratio > max_speedup:
+        print(f"[!] WARNING: Speedup ratio {ratio:.2f}x exceeds max {max_speedup}x")
+        print(f"    Audio will be longer than video slot (may overlap next segment)")
+        ratio = max_speedup
+    
+    # Generate output path
+    out_path = audio_path.parent / f"{audio_path.stem}_fit.wav"
+    
+    try:
+        print(f"[*] Fitting audio: {actual_dur:.2f}s -> {target_dur:.2f}s ({ratio:.2f}x speed)")
+        
+        # Build atempo filter chain
+        # FFmpeg atempo has limits of 0.5-2.0, so we chain for higher ratios
+        filter_complex = f"atempo={ratio:.4f}"
+        
+        # FFmpeg command for time-stretching
+        cmd = [
+            'ffmpeg', '-y', '-v', 'error',
+            '-i', str(audio_path),
+            '-filter:a', filter_complex,
+            '-t', str(target_dur),  # Strictly enforce target duration
+            '-c:a', 'pcm_s16le',  # Output as WAV
+            str(out_path)
+        ]
+        
+        # Run FFmpeg
+        subprocess.run(cmd, check=True, timeout=120)
+        
+        # Verify output file
+        if not out_path.exists():
+            raise RuntimeError(f"Fitted audio file not created: {out_path}")
+        
+        # Verify duration is close to target
+        fitted_dur = get_duration(out_path)
+        duration_diff = abs(fitted_dur - target_dur)
+        
+        if duration_diff > 0.1:  # More than 100ms difference
+            print(f"[!] WARNING: Duration mismatch: got {fitted_dur:.2f}s, wanted {target_dur:.2f}s")
+        else:
+            print(f"[+] Audio fitted successfully: {fitted_dur:.2f}s")
+        
+        return out_path
+        
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(f"FFmpeg timeout fitting audio: {audio_path}")
+    except subprocess.CalledProcessError as e:
+        print(f"[!] ERROR: Audio fitting failed for {audio_path}: {e}")
+        print(f"    Returning original audio (may cause timing issues)")
+        return audio_path  # Fallback to original
+    except Exception as e:
+        raise RuntimeError(f"Unexpected error fitting audio: {e}")
+
+def create_concat_file(segments: List[Dict], silence_ref: Path, output_txt: Path) -> None:
+    """Create FFmpeg concatenation manifest for audio segments.
+    
+    This function generates a concat demuxer file that tells FFmpeg
+    how to concatenate audio segments with proper timing. It handles
+    gaps between segments by inserting silence and ensures precise
+    timing alignment with the original video timeline.
+    
+    Args:
+        segments: List of audio segments with timing information.
+                 Each segment should have 'start', 'end', and 'processed_audio' keys.
+        silence_ref: Path to a reference silence file for gap filling.
+        output_txt: Path for the output concat manifest file.
+        
+    Raises:
+        FileNotFoundError: If silence reference file doesn't exist.
+        ValueError: If segment format is invalid.
+        
+    Example:
+        >>> create_concat_file(chunks, silence_path, Path("concat.txt"))
+        >>> print("Concat manifest created")
+        
+    NOTE: The concat file format uses absolute paths for reliability.
+    Gaps smaller than 0.01 seconds are ignored to avoid excessive
+    fragmentation in the final audio.
+    
+    TODO: Add support for crossfading between segments.
+    """
+    if not silence_ref.exists():
+        raise FileNotFoundError(f"Silence reference file not found: {silence_ref}")
+    
+    if not segments:
+        print(f"[!] WARNING: No segments provided for concatenation")
+        return
+    
+    # Validate segment format
+    required_keys = {'start', 'end'}
+    for i, seg in enumerate(segments):
+        if not required_keys.issubset(seg.keys()):
+            raise ValueError(f"Segment {i} missing required keys: {required_keys - seg.keys()}")
+        if seg['start'] >= seg['end']:
+            raise ValueError(f"Segment {i} has invalid timing: start >= end")
+    
+    try:
+        print(f"[*] Creating concat manifest for {len(segments)} segments")
+        
+        with open(output_txt, 'w', encoding='utf-8') as f:
+            current_time = 0.0
+            gap_count = 0
+            audio_count = 0
+            
+            for i, segment in enumerate(segments):
+                start_time = segment['start']
+                end_time = segment['end']
+                audio_path = segment.get('processed_audio')
+                
+                # Calculate gap from previous segment
+                gap = start_time - current_time
+                
+                # Insert silence for gaps (minimum threshold to avoid fragmentation)
+                if gap > 0.01:  # 10ms minimum gap
+                    f.write(f"file '{silence_ref.resolve().as_posix()}'\n")
+                    f.write(f"inpoint 0\n")
+                    f.write(f"outpoint {gap:.4f}\n")
+                    gap_count += 1
+                
+                # Insert audio segment if available
+                if audio_path and audio_path.exists():
+                    f.write(f"file '{audio_path.resolve().as_posix()}'\n")
+                    f.write(f"duration {end_time - start_time:.4f}\n")
+                    audio_count += 1
+                else:
+                    # Fallback to silence if audio segment is missing
+                    segment_duration = end_time - start_time
+                    if segment_duration > 0:
+                        f.write(f"file '{silence_ref.resolve().as_posix()}'\n")
+                        f.write(f"inpoint 0\n")
+                        f.write(f"outpoint {segment_duration:.4f}\n")
+                        gap_count += 1
+                        print(f"[!] WARNING: Missing audio for segment {i}, using silence")
+                
+                # Update current time
+                current_time = end_time
+            
+            # Log statistics
+            total_duration = segments[-1]['end'] - segments[0]['start']
+            print(f"[+] Concat manifest created:")
+            print(f"    Total duration: {total_duration:.2f}s")
+            print(f"    Audio segments: {audio_count}")
+            print(f"    Silence gaps: {gap_count}")
+            print(f"    Output file: {output_txt}")
+            
+    except Exception as e:
+        raise RuntimeError(f"Failed to create concat manifest: {e}")
+
+def render_video(video_path: Path, concat_file: Path, output_path: Path, subtitle_path: Optional[Path] = None) -> None:
+    """Render the final dubbed video using FFmpeg with optional hard subtitles.
+    
+    This function renders the final video by combining the original video
+    with the dubbed audio track. If subtitle_path is provided, it burns
+    the subtitles into the video (hardsubs), which requires re-encoding.
+    Without subtitles, it uses fast stream copying.
+    
+    Args:
+        video_path: Path to the original video file.
+        concat_file: Path to the audio concatenation manifest file.
+        output_path: Path where the final video will be saved.
+        subtitle_path: Optional path to SRT subtitle file for hardsubs.
+        
+    Raises:
+        FileNotFoundError: If input files don't exist.
+        RuntimeError: If video rendering fails.
+        
+    Example:
+        >>> render_video(video, audio_file, output)
+        >>> render_video(video, audio_file, output, subtitle_path)  # With hardsubs
+        
+    NOTE: Hardsubs (subtitle_path provided) require video re-encoding
+    and will be significantly slower than stream copying.
+    """
+    # Validate input files
+    if not video_path.exists():
+        raise FileNotFoundError(f"Video file not found: {video_path}")
+    if not concat_file.exists():
+        raise FileNotFoundError(f"Concat file not found: {concat_file}")
+    
+    # Ensure output directory exists
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    try:
+        print(f"[*] Rendering final video:")
+        print(f"    Source video: {video_path}")
+        print(f"    Audio concat: {concat_file}")
+        if subtitle_path:
+            print(f"    Subtitles: {subtitle_path} (Re-encoding required)")
+        print(f"    Output: {output_path}")
+        
+        # Base FFmpeg command
+        cmd = [
+            'ffmpeg', '-y', '-v', 'error',
+            '-i', str(video_path),        # Input 0: Video
+            '-f', 'concat', '-safe', '0', 
+            '-i', str(concat_file),       # Input 1: Audio concat
+            '-map', '0:v',                # Use video from input 0
+            '-map', '1:a',                # Use audio from input 1
+        ]
+        
+        if subtitle_path:
+            # --- HARD SUB MODE (Re-encode required) ---
+            sub_path_posix = subtitle_path.resolve().as_posix()
+            sub_path_escaped = sub_path_posix.replace(":", "\\:")
+            
+            # Subtitle style configuration
+            style = "FontName=Arial,FontSize=20,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=1,Shadow=0,MarginV=20"
+            
+            cmd.extend([
+                '-vf', f"subtitles='{sub_path_escaped}':force_style='{style}'",
+                '-c:v', 'libx264',        # Re-encode video for hardsubs
+                '-preset', 'fast',        # Balance speed and quality
+                '-crf', '23'              # Quality factor (18-28 range)
+            ])
+        else:
+            # --- FAST MODE (Stream copy) ---
+            cmd.extend([
+                '-c:v', 'copy',           # Copy video stream (no re-encoding)
+            ])
+        
+        # Audio settings (same for both modes)
+        cmd.extend([
+            '-c:a', 'aac',
+            '-b:a', '192k',
+            '-ar', str(SAMPLE_RATE),
+            '-ac', str(AUDIO_CHANNELS),
+            '-shortest',
+            str(output_path)
+        ])
+        
+        # Run FFmpeg with progress monitoring
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            universal_newlines=True
+        )
+        
+        # Monitor progress (simple implementation)
+        print("    Processing...")
+        while True:
+            output = process.stderr.readline()
+            if output == '' and process.poll() is not None:
+                break
+            if output:
+                # Could parse FFmpeg progress here if needed
+                pass
+        
+        # Check result
+        return_code = process.poll()
+        if return_code != 0:
+            error_output = process.stderr.read()
+            raise RuntimeError(f"FFmpeg failed with code {return_code}: {error_output}")
+        
+        # Verify output file
+        if not output_path.exists():
+            raise RuntimeError(f"Output video file not created: {output_path}")
+        
+        # Get file size for reporting
+        file_size = output_path.stat().st_size / (1024 * 1024)  # MB
+        
+        print(f"[+] Video rendering complete:")
+        print(f"    Output file: {output_path}")
+        print(f"    File size: {file_size:.1f} MB")
+        
+        # Verify output has both video and audio streams
         try:
-            cmd = [
-                'ffprobe', '-v', 'quiet', '-print_format', 'json',
-                '-show_format', '-show_streams', str(video_file)
+            # Quick verification with FFprobe
+            verify_cmd = [
+                'ffprobe', '-v', 'error',
+                '-select_streams', 'v',
+                '-show_entries', 'stream=codec_name',
+                '-of', 'default=noprint_wrappers=1:nokey=1',
+                str(output_path)
             ]
+            video_result = subprocess.run(verify_cmd, capture_output=True, text=True)
             
-            result = subprocess.run(cmd, capture_output=True, text=True)
+            verify_cmd[2] = '-select_streams'  # Change to audio
+            verify_cmd[3] = 'a'
+            audio_result = subprocess.run(verify_cmd, capture_output=True, text=True)
             
-            if result.returncode == 0:
-                info = json.loads(result.stdout)
-                
-                video_stream = None
-                audio_stream = None
-                
-                for stream in info.get('streams', []):
-                    if stream.get('codec_type') == 'video' and not video_stream:
-                        video_stream = stream
-                    elif stream.get('codec_type') == 'audio' and not audio_stream:
-                        audio_stream = stream
-                
-                duration = float(info.get('format', {}).get('duration', 0))
-                
-                return {
-                    'duration': duration,
-                    'duration_formatted': format_duration(duration),
-                    'size': int(info.get('format', {}).get('size', 0)),
-                    'size_mb': int(info.get('format', {}).get('size', 0)) / (1024 * 1024),
-                    'video': {
-                        'width': video_stream.get('width') if video_stream else 0,
-                        'height': video_stream.get('height') if video_stream else 0,
-                        'fps': eval(video_stream.get('r_frame_rate', '0/1')) if video_stream else 0,
-                        'codec': video_stream.get('codec_name') if video_stream else None,
-                        'bit_rate': video_stream.get('bit_rate')
-                    },
-                    'audio': {
-                        'sample_rate': audio_stream.get('sample_rate') if audio_stream else 0,
-                        'channels': audio_stream.get('channels') if audio_stream else 0,
-                        'codec': audio_stream.get('codec_name') if audio_stream else None,
-                        'bit_rate': audio_stream.get('bit_rate')
-                    }
-                }
-            
-            return None
-            
-        except Exception as e:
-            print(f"Error getting video info: {e}")
-            return None
-    
-    def extract_frames(self, video_file, output_dir, interval=1):
-        """Extract frames from video at specified interval"""
-        try:
-            Path(output_dir).mkdir(exist_ok=True)
-            output_pattern = os.path.join(output_dir, "frame_%04d.jpg")
-            
-            cmd = [
-                'ffmpeg', '-i', video_file,
-                '-vf', f'fps=1/{interval}',
-                '-y', output_pattern
-            ]
-            
-            result = subprocess.run(cmd, capture_output=True, text=True)
-            
-            if result.returncode == 0:
-                frame_count = len(list(Path(output_dir).glob("frame_*.jpg")))
-                print(f"Extracted {frame_count} frames")
-                return True
+            if video_result.returncode == 0 and audio_result.returncode == 0:
+                video_codec = video_result.stdout.strip()
+                audio_codec = audio_result.stdout.strip()
+                print(f"    Video codec: {video_codec}")
+                print(f"    Audio codec: {audio_codec}")
             else:
-                print(f"Error extracting frames: {result.stderr}")
-                return False
+                print(f"[!] WARNING: Could not verify output codecs")
                 
         except Exception as e:
-            print(f"Error extracting frames: {e}")
-            return False
-    
-    def merge_audio_video(self, video_file, audio_file, output_file):
-        """Merge audio with video"""
-        try:
-            cmd = [
-                'ffmpeg', '-i', video_file, '-i', audio_file,
-                '-c:v', 'copy', '-c:a', 'aac',
-                '-y', output_file
-            ]
-            
-            result = subprocess.run(cmd, capture_output=True, text=True)
-            
-            if result.returncode == 0 and Path(output_file).exists():
-                print(f"Audio and video merged: {output_file}")
-                return output_file
-            else:
-                print(f"Error merging audio and video: {result.stderr}")
-                return None
-                
-        except Exception as e:
-            print(f"Error merging audio and video: {e}")
-            return None
-    
-    def create_video_with_audio(self, audio_file, output_file, width=1280, height=720):
-        """Create a simple video with audio and black background"""
-        try:
-            cmd = [
-                'ffmpeg', '-f', 'lavfi', '-i', f'color=c=black:s={width}x{height}:d={self.get_audio_duration(audio_file)}',
-                '-i', audio_file,
-                '-c:v', 'libx264', '-c:a', 'aac',
-                '-shortest', '-y', output_file
-            ]
-            
-            result = subprocess.run(cmd, capture_output=True, text=True)
-            
-            if result.returncode == 0 and Path(output_file).exists():
-                print(f"Video created with audio: {output_file}")
-                return output_file
-            else:
-                print(f"Error creating video: {result.stderr}")
-                return None
-                
-        except Exception as e:
-            print(f"Error creating video with audio: {e}")
-            return None
-    
-    def get_audio_duration(self, audio_file):
-        """Get audio duration using ffprobe"""
-        try:
-            cmd = [
-                'ffprobe', '-v', 'quiet', '-show_entries', 'format=duration',
-                '-of', 'default=noprint_wrappers=1:nokey=1', str(audio_file)
-            ]
-            
-            result = subprocess.run(cmd, capture_output=True, text=True)
-            
-            if result.returncode == 0:
-                return float(result.stdout.strip())
-            
-            return 0
-            
-        except:
-            return 0
+            print(f"[!] WARNING: Output verification failed: {e}")
+        
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(f"FFmpeg timeout rendering video: {video_path}")
+    except Exception as e:
+        raise RuntimeError(f"Video rendering failed: {e}")
