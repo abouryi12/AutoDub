@@ -712,8 +712,10 @@ async def download_start(req: DirectDownloadRequest):
     loop.run_in_executor(executor, _do_download)
 
     return {"job_id": job_id}
-
-
-
-
-
+# ---------------------------------------------------------------------------
+# Entry Point
+# ---------------------------------------------------------------------------
+if __name__ == "__main__":
+    import uvicorn
+    # Fly.io expects the app to listen on 0.0.0.0 and defaults to port 8080
+    uvicorn.run("backend.app:app", host="0.0.0.0", port=8080, reload=False)
