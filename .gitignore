@@ -3,6 +3,11 @@ __pycache__/
 .cache/
 temp/
 output/
+downloads/
 *.mp4
 *.wav
 *.mp3
+backend_errors.log
+jobs.json
+.vscode/
+.gemini/

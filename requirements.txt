@@ -11,3 +11,6 @@ soundfile
 tqdm
 pathlib
 typing-extensions
+fastapi
+uvicorn[standard]
+python-multipart

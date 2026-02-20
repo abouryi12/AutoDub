@@ -66,7 +66,21 @@ pip install -r requirements.txt
 python main.py --help
 ```
 
-### Basic Usage
+### 🌐 Web Application (Recommended)
+
+```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Start the web server
+uvicorn backend.app:app --reload
+
+# Open http://localhost:8000 in your browser
+```
+
+The web UI provides a professional interface with real-time progress tracking, dark/light mode, and one-click video download.
+
+### Basic CLI Usage
 
 ```bash
 # Basic dubbing to Spanish
@@ -256,20 +270,29 @@ python main.py "URL" --lang es --gpu
 youtube-auto-dub/
 ├── main.py                 # CLI entry point
 ├── requirements.txt        # Python dependencies
-├── language_map.json      # Language-to-voice mappings
-├── README.md              # This file
-├── src/                   # Source code
-│   ├── engines.py         # AI/ML engines
-│   ├── youtube.py         # YouTube downloader
-│   ├── media.py           # Audio/video processing
+├── language_map.json       # Language-to-voice mappings
+├── README.md               # This file
+├── backend/                # FastAPI web backend
+│   ├── __init__.py
+│   └── app.py              # API routes & SSE progress
+├── frontend/               # Web UI
+│   └── index.html          # Single-page application
+├── styles/                 # CSS design system
+│   └── main.css            # Dark/light themes & animations
+├── scripts/                # Frontend JavaScript
+│   └── app.js              # API client & UI logic
+├── assets/                 # Branding & static assets
+├── src/                    # Core pipeline source code
+│   ├── engines.py          # AI/ML engines
+│   ├── youtube.py          # YouTube downloader
+│   ├── media.py            # Audio/video processing
 │   ├── audio_separation.py # Demucs audio separation
 │   ├── speaker_diarization.py # Pyannote speaker diarization
-│   ├── googlev4.py       # Google Translate scraper
-│   └── core_utils.py      # Shared utilities
-├── tests/                 # Test files
-├── .cache/               # Downloaded YouTube content
-├── output/               # Final dubbed videos
-└── temp/                 # Temporary processing files
+│   ├── googlev4.py         # Google Translate scraper
+│   └── core_utils.py       # Shared utilities
+├── .cache/                 # Downloaded YouTube content
+├── output/                 # Final dubbed videos
+└── temp/                   # Temporary processing files
 ```
 
 ## 🧪 Development
@@ -288,7 +311,7 @@ The project follows Google Style docstrings and includes:
 - [ ] 4K rendering profiles
 - [ ] Voice cloning integration
 - [ ] Batch processing capabilities
-- [ ] Web interface for easier usage
+- [x] Web interface for easier usage
 
 ## 📄 License
 

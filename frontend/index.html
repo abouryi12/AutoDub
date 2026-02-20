@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr" data-theme="dark">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AutoDub — AI Video Dubbing &amp; Download</title>
+    <meta name="description"
+        content="Automatically dub YouTube videos into any language using AI transcription, translation, and text-to-speech synthesis." />
+    <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Noto+Kufi+Arabic:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet" />
+    <link rel="stylesheet" href="/styles/main.css" />
+</head>
+
+<body>
+
+    <!-- ───────── HEADER ───────── -->
+    <header class="app-header">
+        <div class="header-inner">
+            <a href="/" class="logo" aria-label="AutoDub home">
+                <img src="/assets/favicon.svg" alt="AutoDub" class="logo-icon" width="32" height="32" />
+                <span class="logo-text">AutoDub</span>
+            </a>
+
+            <nav class="header-actions">
+                <button id="lang-toggle" class="icon-btn lang-btn" aria-label="Switch language"
+                    title="العربية / English">
+                    <span class="lang-btn-text" data-i18n="langToggle">عربي</span>
+                </button>
+                <button id="theme-toggle" class="icon-btn" aria-label="Toggle theme" title="Toggle dark / light mode">
+                    <svg class="icon sun-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="5" />
+                        <path
+                            d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+                    </svg>
+                    <svg class="icon moon-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 12.79A9 9 0 1111.21 3a7 7 0 009.79 9.79z" />
+                    </svg>
+                </button>
+            </nav>
+        </div>
+    </header>
+
+    <!-- ───────── MAIN ───────── -->
+    <main class="main-content">
+
+        <!-- Hero -->
+        <section class="hero fade-in">
+            <h1 class="hero-title" data-i18n="heroTitle">Dub Any YouTube Video<br /><span class="gradient-text">Into Any
+                    Language</span></h1>
+            <div class="hero-badge" data-i18n="heroBadge">AI-Powered</div>
+            <p class="hero-subtitle" data-i18n="heroSubtitle">Automatically transcribe, translate, and re-voice YouTube
+                videos using state-of-the-art AI. Just paste a link and choose your language.</p>
+        </section>
+
+        <!-- Mode Tabs -->
+        <div class="mode-tabs slide-up">
+            <button class="mode-tab active" data-mode="dub" data-i18n="tabDub">🎙️ Dubbing</button>
+            <button class="mode-tab" data-mode="download" data-i18n="tabDownload">⬇️ Download Only</button>
+        </div>
+
+        <!-- ═══ DOWNLOAD-ONLY PANEL ═══ -->
+        <section id="download-panel" class="download-panel slide-up" hidden>
+            <div class="glass-card form-card">
+
+                <!-- URL Input -->
+                <div class="field-group">
+                    <label for="dl-url" class="field-label">
+                        <svg class="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" />
+                            <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" />
+                        </svg>
+                        <span data-i18n="dlLabelUrl">YouTube URL</span>
+                    </label>
+                    <div class="field-row">
+                        <input id="dl-url" type="url" class="field-input flex-1"
+                            placeholder="https://youtube.com/watch?v=..." required />
+                        <button id="fetch-info-btn" type="button" class="btn-secondary" data-i18n="fetchBtn">Fetch
+                            Info</button>
+                    </div>
+                </div>
+
+                <!-- Video Info Card (hidden until fetched) -->
+                <div id="video-info-card" class="video-info-card" hidden>
+                    <img id="vi-thumb" class="vi-thumb" src="" alt="Video thumbnail" />
+                    <div class="vi-details">
+                        <h3 id="vi-title" class="vi-title"></h3>
+                        <div class="vi-meta">
+                            <span id="vi-channel" class="vi-channel"></span>
+                            <span class="vi-sep">•</span>
+                            <span id="vi-duration" class="vi-duration"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Format Selection (hidden until fetched) -->
+                <div id="format-section" hidden>
+                    <!-- Video / Audio toggle -->
+                    <div class="dl-type-toggle">
+                        <button class="dl-type-btn active" data-type="video" data-i18n="dlVideo">🎬 Video</button>
+                        <button class="dl-type-btn" data-type="audio" data-i18n="dlAudio">🎵 Audio Only</button>
+                    </div>
+
+                    <div class="field-group">
+                        <label for="format-select" class="field-label">
+                            <svg class="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="2" y="2" width="20" height="20" rx="5" />
+                                <path d="M16 8l-8 8M8 8h8v8" />
+                            </svg>
+                            <span data-i18n="dlQuality">Quality</span>
+                        </label>
+                        <select id="format-select" class="field-input"></select>
+                    </div>
+
+                    <button id="dl-start-btn" type="button" class="btn-primary">
+                        <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+                            <polyline points="7 10 12 15 17 10" />
+                            <line x1="12" y1="15" x2="12" y2="3" />
+                        </svg>
+                        <span class="btn-label" data-i18n="dlStartBtn">Download</span>
+                        <span class="btn-loader" hidden>
+                            <svg class="spinner" viewBox="0 0 24 24">
+                                <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" fill="none"
+                                    stroke-dasharray="31.4 31.4" stroke-linecap="round" />
+                            </svg>
+                            <span data-i18n="dlDownloading">Downloading…</span>
+                        </span>
+                    </button>
+
+                    <!-- Download Progress -->
+                    <div id="dl-progress" class="dl-progress-section" hidden>
+                        <div class="progress-track">
+                            <div id="dl-progress-bar" class="progress-fill" style="width:0%"></div>
+                            <span id="dl-progress-pct" class="progress-pct">0%</span>
+                        </div>
+                        <p id="dl-progress-msg" class="dl-progress-msg" data-i18n="dlDownloading">Downloading…</p>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- Form Card -->
+        <section class="form-section slide-up">
+            <div class="glass-card form-card">
+                <form id="dub-form" autocomplete="off">
+
+                    <!-- URL -->
+                    <div class="field-group">
+                        <label for="video-url" class="field-label">
+                            <svg class="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" />
+                                <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" />
+                            </svg>
+                            <span data-i18n="labelUrl">YouTube URL</span>
+                        </label>
+                        <input id="video-url" type="url" class="field-input"
+                            placeholder="https://youtube.com/watch?v=..." required />
+                    </div>
+
+                    <!-- Language -->
+                    <div class="field-row">
+                        <div class="field-group flex-1">
+                            <label for="target-lang" class="field-label">
+                                <svg class="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <circle cx="12" cy="12" r="10" />
+                                    <path
+                                        d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10A15.3 15.3 0 0112 2z" />
+                                </svg>
+                                <span data-i18n="labelLang">Target Language</span>
+                            </label>
+                            <select id="target-lang" class="field-input" required>
+                                <option value="" data-i18n="loadingLangs">Loading languages…</option>
+                            </select>
+                        </div>
+
+                        <!-- Voice Gender -->
+                        <div class="field-group flex-1">
+                            <label for="voice-gender" class="field-label">
+                                <svg class="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
+                                    <circle cx="12" cy="7" r="4" />
+                                </svg>
+                                <span data-i18n="labelGender">Voice Gender</span>
+                            </label>
+                            <select id="voice-gender" class="field-input" required>
+                                <option value="female" data-i18n="female">Female</option>
+                                <option value="male" data-i18n="male">Male</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Subtitles toggle -->
+                    <div class="field-group">
+                        <label class="toggle-label">
+                            <input id="subtitle-check" type="checkbox" class="toggle-input" />
+                            <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                            <span class="toggle-text" data-i18n="subtitleToggle">Burn subtitles into the video</span>
+                        </label>
+                    </div>
+
+                    <!-- Submit -->
+                    <button id="submit-btn" type="submit" class="btn-primary">
+                        <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round">
+                            <polygon points="5 3 19 12 5 21 5 3" />
+                        </svg>
+                        <span class="btn-label" data-i18n="startBtn">Start Dubbing</span>
+                        <span class="btn-loader" hidden>
+                            <svg class="spinner" viewBox="0 0 24 24">
+                                <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" fill="none"
+                                    stroke-dasharray="31.4 31.4" stroke-linecap="round" />
+                            </svg>
+                            <span data-i18n="processing">Processing…</span>
+                        </span>
+                    </button>
+                </form>
+            </div>
+        </section>
+
+        <!-- Progress Panel (hidden by default) -->
+        <section id="progress-section" class="progress-section" hidden>
+            <div class="glass-card progress-card">
+                <h2 class="section-title" data-i18n="progressTitle">Pipeline Progress</h2>
+
+                <!-- Step indicators -->
+                <div class="steps-track">
+                    <div class="step" data-step="init">
+                        <div class="step-dot"><svg class="check-icon" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="20 6 9 17 4 12" />
+                            </svg></div>
+                        <span class="step-label" data-i18n="stepInit">Init</span>
+                    </div>
+                    <div class="step-line"></div>
+                    <div class="step" data-step="download">
+                        <div class="step-dot"><svg class="check-icon" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="20 6 9 17 4 12" />
+                            </svg></div>
+                        <span class="step-label" data-i18n="stepDownload">Download</span>
+                    </div>
+                    <div class="step-line"></div>
+                    <div class="step" data-step="transcribe">
+                        <div class="step-dot"><svg class="check-icon" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="20 6 9 17 4 12" />
+                            </svg></div>
+                        <span class="step-label" data-i18n="stepTranscribe">Transcribe</span>
+                    </div>
+                    <div class="step-line"></div>
+                    <div class="step" data-step="translate">
+                        <div class="step-dot"><svg class="check-icon" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="20 6 9 17 4 12" />
+                            </svg></div>
+                        <span class="step-label" data-i18n="stepTranslate">Translate</span>
+                    </div>
+                    <div class="step-line"></div>
+                    <div class="step" data-step="synthesize">
+                        <div class="step-dot"><svg class="check-icon" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="20 6 9 17 4 12" />
+                            </svg></div>
+                        <span class="step-label" data-i18n="stepSynthesize">Synthesize</span>
+                    </div>
+                    <div class="step-line"></div>
+                    <div class="step" data-step="render">
+                        <div class="step-dot"><svg class="check-icon" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="20 6 9 17 4 12" />
+                            </svg></div>
+                        <span class="step-label" data-i18n="stepRender">Render</span>
+                    </div>
+                </div>
+
+                <!-- Progress bar -->
+                <div class="progress-bar-wrap">
+                    <div class="progress-bar" id="progress-bar" style="width:0%"></div>
+                    <span class="progress-pct" id="progress-pct">0%</span>
+                </div>
+
+                <!-- Log -->
+                <div class="log-box" id="log-box"></div>
+            </div>
+        </section>
+
+        <!-- Result Panel (hidden by default) -->
+        <section id="result-section" class="result-section" hidden>
+            <div class="glass-card result-card slide-up">
+                <div class="result-icon-wrap">
+                    <svg class="result-check" viewBox="0 0 64 64" fill="none">
+                        <circle cx="32" cy="32" r="30" stroke="url(#ok-grad)" stroke-width="3" />
+                        <polyline points="20 34 28 42 44 24" stroke="url(#ok-grad)" stroke-width="3"
+                            stroke-linecap="round" stroke-linejoin="round" />
+                        <defs>
+                            <linearGradient id="ok-grad" x1="0" y1="0" x2="64" y2="64">
+                                <stop stop-color="#34d399" />
+                                <stop offset="1" stop-color="#6366f1" />
+                            </linearGradient>
+                        </defs>
+                    </svg>
+                </div>
+                <h2 class="result-title" data-i18n="resultTitle">Dubbing Complete!</h2>
+                <p class="result-meta" id="result-meta"></p>
+                <a id="download-link" class="btn-primary download-btn" href="#" download>
+                    <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+                        <polyline points="7 10 12 15 17 10" />
+                        <line x1="12" y1="15" x2="12" y2="3" />
+                    </svg>
+                    <span data-i18n="downloadBtn">Download Video</span>
+                </a>
+            </div>
+        </section>
+
+        <!-- Error toast -->
+        <div id="toast" class="toast" hidden></div>
+
+    </main>
+
+    <!-- ───────── FOOTER ───────── -->
+    <footer class="app-footer">
+        <p data-i18n="footer">&copy; 2026 YouTube Auto Dub &middot; Built with FastAPI &amp; Whisper</p>
+    </footer>
+
+    <script src="/scripts/app.js?v=10"></script>
+</body>
+
+</html>
