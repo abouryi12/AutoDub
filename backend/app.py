@@ -70,10 +70,9 @@ app.add_middleware(
     expose_headers=["Content-Disposition"],
 )
 
-# Serve static directories
-app.mount("/styles", StaticFiles(directory=str(STYLES_DIR)), name="styles")
-app.mount("/scripts", StaticFiles(directory=str(SCRIPTS_DIR)), name="scripts")
-app.mount("/assets", StaticFiles(directory=str(ASSETS_DIR)), name="assets")
+# ---------------------------------------------------------------------------
+# Global State (Persistent)
+# ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
 # Global State (Persistent)
@@ -309,15 +308,6 @@ def run_pipeline(job_id: str, url: str, lang: str, gender: str, subtitle: bool):
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
-@app.get("/")
-async def root():
-    """Serve the frontend index page."""
-    index = FRONTEND_DIR / "index.html"
-    if not index.exists():
-        raise HTTPException(404, "Frontend not found")
-    return FileResponse(index, media_type="text/html")
-
-
 @app.get("/api/languages")
 async def get_languages():
     """Return available languages with voice info."""

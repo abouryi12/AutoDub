@@ -1,4 +1,4 @@
-# YouTube Auto Dub
+# AutoDub 🎙️🔗
 
 An automated video dubbing pipeline that transcribes, translates, and dubs YouTube videos using AI/ML technologies.
 
@@ -56,7 +56,7 @@ YouTube Auto Dub is a comprehensive Python pipeline that automatically:
 
 ```bash
 # Clone the repository
-git clone https://github.com/mangodxd/youtube-auto-dub.git
+git clone https://github.com/abouryi12/AutoDub.git
 cd youtube-auto-dub
 
 # Install Python dependencies
@@ -338,15 +338,14 @@ Most dependencies are open-source:
 
 ## 📞 Support
 
-- 🐛 **Bug Reports**: [GitHub Issues](https://github.com/mangodxd/youtube-auto-dub/issues)
-- 💡 **Feature Requests**: [GitHub Discussions](https://github.com/mangodxd/youtube-auto-dub/discussions)
+- 🐛 **Bug Reports**: [GitHub Issues](https://github.com/abouryi12/AutoDub/issues)
+- 💡 **Feature Requests**: [GitHub Discussions](https://github.com/abouryi12/AutoDub/discussions)
 
 ## 🔄 Changelog
 
 ### Version 1.0.0
 - 🎉 Complete refactoring and consolidation
 - 📝 Google Style docstrings throughout
-- 🏷️ Personal branding by Nguyen Cong Thuan Huy (mangodxd)
 - 🧹 Comprehensive code cleanup and optimization
 - 💾 Enhanced memory management and GPU optimization
 - 🌍 Improved language support and voice mapping
@@ -357,4 +356,4 @@ Most dependencies are open-source:
 
 ---
 
-**Made with ❤️ by Nguyen Cong Thuan Huy (mangodxd)**
+**Made with ❤️ for the AI Community**

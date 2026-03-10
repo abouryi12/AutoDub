@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AutoDub — AI Video Dubbing &amp; Download</title>
     <meta name="description"
-        content="Automatically dub YouTube videos into any language using AI transcription, translation, and text-to-speech synthesis." />
+        content="Automatically dub videos into any language using AI transcription, translation, and text-to-speech synthesis." />
     <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -52,11 +52,10 @@
 
         <!-- Hero -->
         <section class="hero fade-in">
-            <h1 class="hero-title" data-i18n="heroTitle">Dub Any YouTube Video<br /><span class="gradient-text">Into Any
+            <h1 class="hero-title" data-i18n="heroTitle">Dub Any Video<br /><span class="gradient-text">Into Any
                     Language</span></h1>
             <div class="hero-badge" data-i18n="heroBadge">AI-Powered</div>
-            <p class="hero-subtitle" data-i18n="heroSubtitle">Automatically transcribe, translate, and re-voice YouTube
-                videos using state-of-the-art AI. Just paste a link and choose your language.</p>
+            <p class="hero-subtitle" data-i18n="heroSubtitle">Automatically transcribe, translate, and re-voice videos using state-of-the-art AI. Just paste a link and choose your language.</p>
         </section>
 
         <!-- Mode Tabs -->
@@ -77,11 +76,11 @@
                             <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" />
                             <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" />
                         </svg>
-                        <span data-i18n="dlLabelUrl">YouTube URL</span>
+                        <span data-i18n="dlLabelUrl">Video URL</span>
                     </label>
                     <div class="field-row">
                         <input id="dl-url" type="url" class="field-input flex-1"
-                            placeholder="https://youtube.com/watch?v=..." required />
+                            placeholder="https://example.com/video..." required />
                         <button id="fetch-info-btn" type="button" class="btn-secondary" data-i18n="fetchBtn">Fetch
                             Info</button>
                     </div>
@@ -163,10 +162,10 @@
                                 <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" />
                                 <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" />
                             </svg>
-                            <span data-i18n="labelUrl">YouTube URL</span>
+                            <span data-i18n="labelUrl">Video URL</span>
                         </label>
                         <input id="video-url" type="url" class="field-input"
-                            placeholder="https://youtube.com/watch?v=..." required />
+                            placeholder="https://example.com/video..." required />
                     </div>
 
                     <!-- Language -->
@@ -335,10 +334,10 @@
 
     <!-- ───────── FOOTER ───────── -->
     <footer class="app-footer">
-        <p data-i18n="footer">&copy; 2026 YouTube Auto Dub &middot; Built with FastAPI &amp; Whisper</p>
+        <p data-i18n="footer">&copy; 2026 Auto Dub &middot; Built with FastAPI &amp; Whisper</p>
     </footer>
 
-    <script src="/scripts/app.js?v=10"></script>
+    <script src="/scripts/app.js?v=13"></script>
 </body>
 
 </html>

@@ -8,6 +8,11 @@
 (function () {
     "use strict";
 
+    // ── CONFIGURATION ───────────────────────────────────────────
+    // Change this to your deployed backend URL (e.g., "https://my-api.onrender.com")
+    // Leave empty ("") if the backend and frontend are on the same domain
+    const API_BASE_URL = "";
+
     // ── DOM refs ────────────────────────────────────────────────
     const $ = (s) => document.querySelector(s);
     const $$ = (s) => document.querySelectorAll(s);
@@ -40,9 +45,10 @@
         en: {
             langToggle: "عربي",
             heroBadge: "AI-Powered",
-            heroTitle: 'Dub Any YouTube Video<br/><span class="gradient-text">Into Any Language</span>',
-            heroSubtitle: "Automatically transcribe, translate, and re-voice YouTube videos using state-of-the-art AI. Just paste a link and choose your language.",
-            labelUrl: "YouTube URL",
+            heroTitle: 'Dub Any Video<br/><span class="gradient-text">Into Any Language</span>',
+            heroTitleDownload: 'Download Any Video<br/><span class="gradient-text">Instantly</span>',
+            heroSubtitle: "Automatically transcribe, translate, and re-voice videos using state-of-the-art AI. Just paste a link and choose your language.",
+            labelUrl: "Video URL",
             labelLang: "Target Language",
             loadingLangs: "Loading languages…",
             labelGender: "Voice Gender",
@@ -60,14 +66,14 @@
             stepRender: "Render",
             resultTitle: "Dubbing Complete!",
             downloadBtn: "Download Video",
-            footer: "&copy; 2026 YouTube Auto Dub &middot; Built with FastAPI &amp; Whisper",
-            toastNoUrl: "Please enter a YouTube URL.",
+            footer: "&copy; 2026 Auto Dub &middot; Built with FastAPI &amp; Whisper",
+            toastNoUrl: "Please enter a valid video URL.",
             toastComplete: "Dubbing complete! 🎉",
             toastDisconnect: "Lost connection to server.",
             toastLangFail: "Could not load languages — using default (Spanish).",
             tabDub: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg> Dubbing',
             tabDownload: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Download Only',
-            dlLabelUrl: "YouTube URL",
+            dlLabelUrl: "Video URL",
             fetchBtn: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Search',
             fetchingInfo: "Searching…",
             dlVideo: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/><line x1="17" y1="17" x2="22" y2="17"/></svg> Video',
@@ -81,7 +87,8 @@
         ar: {
             langToggle: "EN",
             heroBadge: "بتقنية الذكاء الاصطناعي",
-            heroTitle: 'حوّل أي فيديو يوتيوب<br/><span class="gradient-text">لأي لغة في العالم</span>',
+            heroTitle: 'حوّل أي فيديو<br/><span class="gradient-text">لأي لغة في العالم</span>',
+            heroTitleDownload: 'حمّل أي فيديو<br/><span class="gradient-text">من أي مكان</span>',
             heroSubtitle: "",
             labelUrl: "لينك الفيديو",
             labelLang: "اللغة المطلوبة",
@@ -101,8 +108,8 @@
             stepRender: "إنتاج",
             resultTitle: "تمّ بنجاح! 🎬",
             downloadBtn: "حمّل الفيديو",
-            footer: "&copy; 2026 YouTube Auto Dub &middot; مبني بـ FastAPI و Whisper",
-            toastNoUrl: "من فضلك حط لينك فيديو يوتيوب الأول.",
+            footer: "&copy; 2026 Auto Dub &middot; مبني بـ FastAPI و Whisper",
+            toastNoUrl: "من فضلك حط لينك الفيديو الأول.",
             toastComplete: "الدبلجة خلصت بنجاح! 🎉",
             toastDisconnect: "الاتصال بالسيرفر اتقطع، حاول تاني.",
             toastLangFail: "مقدرناش نحمّل اللغات — هنستخدم الإسبانية كبداية.",
@@ -179,7 +186,7 @@
     // ── Load Languages ──────────────────────────────────────────
     async function loadLanguages() {
         try {
-            const res = await fetch("/api/languages");
+            const res = await fetch(`${API_BASE_URL}/api/languages`);
             const data = await res.json();
             langSelect.innerHTML = "";
 
@@ -227,6 +234,16 @@
     loadLanguages();
 
     // ── Form Submit ─────────────────────────────────────────────
+    urlInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+            e.preventDefault();
+            // Optional: only submit if URL is valid
+            if (urlInput.value.trim()) {
+                submitBtn.click();
+            }
+        }
+    });
+
     form.addEventListener("submit", async (e) => {
         e.preventDefault();
 
@@ -249,7 +266,7 @@
         progressSec.scrollIntoView({ behavior: "smooth", block: "start" });
 
         try {
-            const res = await fetch("/api/dub", {
+            const res = await fetch(`${API_BASE_URL}/api/dub`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ url, lang, gender, subtitle: sub }),
@@ -268,7 +285,7 @@
 
     // ── SSE Progress ────────────────────────────────────────────
     function connectSSE(jobId) {
-        const evtSource = new EventSource(`/api/progress/${jobId}`);
+        const evtSource = new EventSource(`${API_BASE_URL}/api/progress/${jobId}`);
 
         evtSource.onmessage = (e) => {
             try {
@@ -324,7 +341,7 @@
         if (status === "complete") {
             markAllStepsDone();
             resultMeta.textContent = message;
-            downloadLink.href = `/api/download/${jobId}`;
+            downloadLink.href = `${API_BASE_URL}/api/download/${jobId}`;
             resultSec.hidden = false;
             resultSec.scrollIntoView({ behavior: "smooth", block: "center" });
             showToast(tr("toastComplete"), "success");
@@ -372,6 +389,8 @@
     const dubForm = $(".form-section");
     const downloadPanel = $("#download-panel");
 
+    const heroTitleEl = $(".hero-title");
+
     modeTabs.forEach((tab) => {
         tab.addEventListener("click", () => {
             modeTabs.forEach((t) => t.classList.remove("active"));
@@ -382,9 +401,11 @@
                 progressSec.hidden = true;
                 resultSec.hidden = true;
                 downloadPanel.hidden = false;
+                heroTitleEl.innerHTML = tr("heroTitleDownload");
             } else {
                 dubForm.hidden = false;
                 downloadPanel.hidden = true;
+                heroTitleEl.innerHTML = tr("heroTitle");
             }
         });
     });
@@ -448,6 +469,13 @@
     }
 
     // Fetch Info
+    dlUrl.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+            e.preventDefault();
+            fetchInfoBtn.click();
+        }
+    });
+
     fetchInfoBtn.addEventListener("click", async () => {
         const url = dlUrl.value.trim();
         if (!url) { showToast(tr("toastNoUrl")); return; }
@@ -456,7 +484,7 @@
         fetchInfoBtn.textContent = tr("fetchingInfo");
 
         try {
-            const res = await fetch("/api/video-info", {
+            const res = await fetch(`${API_BASE_URL}/api/video-info`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ url }),
@@ -523,7 +551,7 @@
         dlProgressMsg.textContent = tr("dlDownloading");
 
         try {
-            const res = await fetch("/api/download-start", {
+            const res = await fetch(`${API_BASE_URL}/api/download-start`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ url, format_id: formatId, media_type: dlMediaType }),
@@ -535,7 +563,7 @@
             const { job_id } = await res.json();
 
             // Connect to SSE for live progress
-            const evtSource = new EventSource(`/api/progress/${job_id}`);
+            const evtSource = new EventSource(`${API_BASE_URL}/api/progress/${job_id}`);
             evtSource.onmessage = (e) => {
                 try {
                     const ev = JSON.parse(e.data);
@@ -568,7 +596,7 @@
                                 saveBtn.disabled = true;
                                 saveBtn.textContent = "⌛ Getting file...";
 
-                                const res = await fetch(`/api/download/${job_id}`);
+                                const res = await fetch(`${API_BASE_URL}/api/download/${job_id}`);
                                 if (!res.ok) throw new Error("Download failed");
 
                                 // Build filename from video title + correct extension
